@@ -1,0 +1,59 @@
+# ==============================
+# OS
+# ==============================
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# ==============================
+# Environment / Secrets
+# ==============================
+.env
+.env.*
+!.env.example
+
+# ==============================
+# IDE
+# ==============================
+.idea/
+*.iml
+.vscode/*
+!.vscode/extensions.json
+
+# ==============================
+# Node.js / TypeScript (server/)
+# ==============================
+node_modules/
+server/dist/
+*.tsbuildinfo
+yarn.lock
+pnpm-lock.yaml
+
+# ==============================
+# Android / Gradle (android/)
+# ==============================
+android/build/
+android/app/build/
+android/.gradle/
+.gradle/
+android/local.properties
+
+# Signing
+*.jks
+*.keystore
+
+# APK / AAB outputs
+*.apk
+*.aab
+
+# Android profiling / captures
+*.hprof
+captures/
+# ==============================
+# TEMP till ready
+# ==============================
+plans/
+.claude/
+.mcp.json
+README.md
+CLAUDE.md
