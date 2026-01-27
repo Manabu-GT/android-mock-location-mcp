@@ -1,0 +1,40 @@
+{
+  "name": "android-mock-location-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for Android mock location testing",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "android-mock-location-mcp": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js",
+    "prepare": "npm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.25.2",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.0",
+    "@types/node": "^22.0.0"
+  },
+  "keywords": [
+    "mcp",
+    "android",
+    "mock-location",
+    "gps",
+    "testing",
+    "location",
+    "model-context-protocol"
+  ],
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "dist"
+  ]
+}
