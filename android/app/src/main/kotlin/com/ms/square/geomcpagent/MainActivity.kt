@@ -1,4 +1,4 @@
-package com.geomcp.agent
+package com.ms.square.geomcpagent
 
 import android.Manifest
 import android.app.AppOpsManager
@@ -28,7 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.geomcp.agent.ui.MainScreen
+import com.ms.square.geomcpagent.ui.MainScreen
 
 private const val LOGTAG = "MainActivity"
 

@@ -1,4 +1,4 @@
-package com.geomcp.agent
+package com.ms.square.geomcpagent
 
 import android.annotation.SuppressLint
 import android.app.Notification

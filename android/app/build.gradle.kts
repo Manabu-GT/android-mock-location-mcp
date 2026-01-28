@@ -6,11 +6,11 @@ plugins {
 }
 
 android {
-  namespace = "com.geomcp.agent"
+  namespace = "com.ms.square.geomcpagent"
   compileSdk = libs.versions.androidCompileSdk.get().toInt()
 
   defaultConfig {
-    applicationId = "com.geomcp.agent"
+    applicationId = "com.ms.square.geomcpagent"
     minSdk = libs.versions.androidMinSdk.get().toInt()
     targetSdk = libs.versions.androidTargetSdk.get().toInt()
     versionCode = 1

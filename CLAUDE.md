@@ -35,7 +35,7 @@ server/src/
   geo-math.ts       # Haversine distance, bearing calculation
   fetch-utils.ts    # Shared fetch with timeout helper
 
-android/app/src/main/kotlin/com/geomcp/agent/
+android/app/src/main/kotlin/com/ms/square/geomcpagent/
   MainActivity.kt         # Entry point, permission handling
   MockLocationService.kt  # Foreground service, socket server, mock location API
   ui/MainScreen.kt        # Compose UI

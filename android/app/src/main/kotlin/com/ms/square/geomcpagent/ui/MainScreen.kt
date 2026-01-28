@@ -1,4 +1,4 @@
-package com.geomcp.agent.ui
+package com.ms.square.geomcpagent.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -32,7 +32,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.geomcp.agent.ServiceState
+import com.ms.square.geomcpagent.ServiceState
 
 @Composable
 internal fun MainScreen(
