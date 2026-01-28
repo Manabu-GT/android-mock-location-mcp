@@ -2,5 +2,117 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "config:recommended"
+  ],
+  "schedule": [
+    "before 9am on monday"
+  ],
+  "automerge": false,
+  "labels": [
+    "dependencies"
+  ],
+  "prConcurrentLimit": 3,
+  "lockFileMaintenance": {
+    "enabled": true
+  },
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "labels": [
+      "security"
+    ]
+  },
+  "packageRules": [
+    {
+      "description": "Major updates require dashboard approval",
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "Bump range floor for npm dependencies",
+      "matchFileNames": [
+        "server/**"
+      ],
+      "rangeStrategy": "bump"
+    },
+    {
+      "description": "MCP protocol stack - group SDK + Zod, dashboard approval for major/minor",
+      "groupName": "MCP protocol stack",
+      "matchPackageNames": [
+        "@modelcontextprotocol/sdk",
+        "zod"
+      ],
+      "matchUpdateTypes": [
+        "major",
+        "minor"
+      ],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "Node.js dev tooling minor/patch",
+      "groupName": "Node.js dev tooling",
+      "matchPackageNames": [
+        "typescript",
+        "@types/node"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ]
+    },
+    {
+      "description": "Kotlin major/minor updates require approval (for library compatibility)",
+      "matchPackageNames": [
+        "/^org\\.jetbrains\\.kotlin([.:]|$)/"
+      ],
+      "matchUpdateTypes": [
+        "major",
+        "minor"
+      ],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "Compose libraries - all updates require approval",
+      "groupName": "Compose",
+      "dependencyDashboardApproval": true,
+      "matchPackageNames": [
+        "/^androidx\\.compose/"
+      ]
+    },
+    {
+      "description": "Pin AGP to 8.x until Gradle 9 migration",
+      "matchPackageNames": [
+        "com.android.application"
+      ],
+      "allowedVersions": "8.x"
+    },
+    {
+      "description": "AndroidX libraries (excluding Compose)",
+      "groupName": "AndroidX libraries",
+      "matchPackageNames": [
+        "/^androidx\\./",
+        "!/^androidx\\.compose/"
+      ]
+    },
+    {
+      "description": "Build tooling plugins",
+      "groupName": "Build tooling",
+      "matchPackageNames": [
+        "/com\\.diffplug\\.spotless/",
+        "/io\\.gitlab\\.arturbosch\\.detekt/"
+      ]
+    },
+    {
+      "description": "GitHub Actions - automerge minor/patch",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "groupName": "GitHub Actions",
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "automerge": true
+    }
   ]
 }
