@@ -1,7 +1,7 @@
 # android-mock-location-mcp
 
-[![Server CI](https://github.com/user/android-mock-location-mcp/actions/workflows/server-ci.yml/badge.svg)](https://github.com/user/android-mock-location-mcp/actions/workflows/server-ci.yml)
-[![Android CI](https://github.com/user/android-mock-location-mcp/actions/workflows/android-ci.yml/badge.svg)](https://github.com/user/android-mock-location-mcp/actions/workflows/android-ci.yml)
+[![Server CI](https://github.com/Manabu-GT/android-mock-location-mcp/actions/workflows/server-ci.yml/badge.svg)](https://github.com/user/android-mock-location-mcp/actions/workflows/server-ci.yml)
+[![Android CI](https://github.com/Manabu-GT/android-mock-location-mcp/actions/workflows/android-ci.yml/badge.svg)](https://github.com/user/android-mock-location-mcp/actions/workflows/android-ci.yml)
 [![npm version](https://badge.fury.io/js/android-mock-location-mcp.svg)](https://www.npmjs.com/package/android-mock-location-mcp)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
