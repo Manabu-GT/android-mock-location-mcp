@@ -50,10 +50,8 @@ android/local.properties
 *.hprof
 captures/
 # ==============================
-# TEMP till ready
+# AI Tool Configs
 # ==============================
 plans/
 .claude/
 .mcp.json
-README.md
-CLAUDE.md
