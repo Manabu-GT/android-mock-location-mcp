@@ -30,6 +30,11 @@
     "location",
     "model-context-protocol"
   ],
+  "author": "Manabu-GT (Manabu Shimobe)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Manabu-GT/android-mock-location-mcp.git"
+  },
   "license": "Apache-2.0",
   "engines": {
     "node": ">=18"
