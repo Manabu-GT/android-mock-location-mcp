@@ -22,14 +22,3 @@ export function computeBearing(lat1: number, lng1: number, lat2: number, lng2: n
     Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(dLng);
   return (toDeg(Math.atan2(y, x)) + 360) % 360;
 }
-
-/** Linear interpolation between two coordinate pairs (0.0 to 1.0). */
-export function interpolate(
-  lat1: number,
-  lng1: number,
-  lat2: number,
-  lng2: number,
-  fraction: number,
-): { lat: number; lng: number } {
-  return { lat: lat1 + (lat2 - lat1) * fraction, lng: lng1 + (lng2 - lng1) * fraction };
-}

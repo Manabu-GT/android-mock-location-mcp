@@ -4,7 +4,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { geocodePlace } from "./geocode.js";
-import { haversineDistance, computeBearing, interpolate } from "./geo-math.js";
+import { haversineDistance } from "./geo-math.js";
+import { getRoute, interpolateAlongRoute, bearingAlongRoute } from "./routing.js";
 import {
   sendCommand,
   connectToDevice,
@@ -33,6 +34,11 @@ onDisconnect(() => stopSimulation());
 function text(msg: string) {
   return { content: [{ type: "text" as const, text: msg }] };
 }
+
+const isOsmProvider = !process.env.PROVIDER || ["osm", "osrm"].includes(process.env.PROVIDER.toLowerCase());
+const geocodeHint = isOsmProvider
+  ? " Prefer resolving place names to lat/lng coordinates yourself and passing them directly, as the default geocoder (Nominatim) is rate-limited."
+  : "";
 
 // ── MCP Server ──────────────────────────────────────────────────────────────
 
@@ -81,7 +87,7 @@ server.registerTool(
 server.registerTool(
   "geo_set_location",
   {
-    description: "Set device GPS to coordinates or any place name/address (geocoded via OpenStreetMap Nominatim).",
+    description: "Set device GPS to coordinates or any place name/address (geocoded via configured provider)." + geocodeHint,
     inputSchema: {
       lat: z.number().optional().describe("Latitude (-90 to 90)"),
       lng: z.number().optional().describe("Longitude (-180 to 180)"),
@@ -140,7 +146,10 @@ server.registerTool(
 server.registerTool(
   "geo_simulate_route",
   {
-    description: "Simulate movement along a route between two points at a given speed. Accepts place names (geocoded via OpenStreetMap) or lat/lng coordinates.",
+    description:
+      "Simulate movement along a route between two points at a given speed. " +
+      "Routes follow real streets via a routing provider (configurable via PROVIDER env var). " +
+      "Accepts place names (geocoded via configured provider) or lat/lng coordinates." + geocodeHint,
     inputSchema: {
       from: z.string().optional().describe("Starting place name or address"),
       to: z.string().optional().describe("Destination place name or address"),
@@ -150,15 +159,25 @@ server.registerTool(
       toLng: z.number().optional().describe("Destination longitude"),
       speedKmh: z.number().default(60).describe("Speed in km/h"),
       trafficMultiplier: z.number().default(1.0).describe("Traffic slowdown factor (e.g. 1.5 = 50% slower)"),
+      profile: z
+        .enum(["car", "foot", "bike"])
+        .default("car")
+        .describe("Routing profile. Use 'foot' for walking, 'bike' for cycling, 'car' for driving. Choose based on the user's intent."),
     },
   },
-  async ({ from, to, fromLat, fromLng, toLat, toLng, speedKmh, trafficMultiplier }) => {
+  async ({ from, to, fromLat, fromLng, toLat, toLng, speedKmh, trafficMultiplier, profile }) => {
     const resolveEndpoint = async (
-      name?: string, lat?: number, lng?: number, label?: string,
+      name?: string,
+      lat?: number,
+      lng?: number,
+      label?: string,
     ): Promise<{ lat: number; lng: number } | { error: string }> => {
       if (name) {
         const r = await geocodePlace(name);
-        if (!r) return { error: `Could not geocode "${name}" for ${label}. Try a more specific name or use ${label}Lat/${label}Lng.` };
+        if (!r)
+          return {
+            error: `Could not geocode "${name}" for ${label}. Try a more specific name or use ${label}Lat/${label}Lng.`,
+          };
         return { lat: r.lat, lng: r.lng };
       }
       if (lat !== undefined && lng !== undefined) return { lat, lng };
@@ -170,46 +189,50 @@ server.registerTool(
     if ("error" in start) return text(start.error);
     if ("error" in end) return text(end.error);
 
-    const distM = haversineDistance(start.lat, start.lng, end.lat, end.lng);
+    // Fetch street-level route (falls back to straight-line if provider fails)
+    const route = await getRoute(start.lat, start.lng, end.lat, end.lng, profile);
+
     const effectiveSpeed = (speedKmh / trafficMultiplier) * (1000 / 3600); // m/s
-    const totalSeconds = Math.max(1, Math.round(distM / effectiveSpeed));
+    const totalSeconds = Math.max(1, Math.round(route.distanceMeters / effectiveSpeed));
 
     stopSimulation();
     let step = 0;
 
     // Send starting position immediately
+    const startPoint = route.points[0]!;
     sendCommand({
       type: "set_location",
-      lat: start.lat,
-      lng: start.lng,
+      lat: startPoint.lat,
+      lng: startPoint.lng,
       accuracy: 3,
       altitude: 0,
       speed: 0,
-      bearing: computeBearing(start.lat, start.lng, end.lat, end.lng),
+      bearing: bearingAlongRoute(route, 0),
     }).catch(() => {});
-    lastLat = start.lat;
-    lastLng = start.lng;
+    lastLat = startPoint.lat;
+    lastLng = startPoint.lng;
 
     simulationTimer = setInterval(() => {
       step++;
       if (step > totalSeconds) {
+        const endPoint = route.points[route.points.length - 1]!;
         sendCommand({
           type: "set_location",
-          lat: end.lat,
-          lng: end.lng,
+          lat: endPoint.lat,
+          lng: endPoint.lng,
           accuracy: 3,
           altitude: 0,
           speed: 0,
           bearing: 0,
         }).catch(() => {});
-        lastLat = end.lat;
-        lastLng = end.lng;
+        lastLat = endPoint.lat;
+        lastLng = endPoint.lng;
         stopSimulation();
         return;
       }
       const frac = step / totalSeconds;
-      const pos = interpolate(start.lat, start.lng, end.lat, end.lng, frac);
-      const bearing = computeBearing(pos.lat, pos.lng, end.lat, end.lng);
+      const pos = interpolateAlongRoute(route, frac);
+      const bearing = bearingAlongRoute(route, frac);
       sendCommand({
         type: "set_location",
         lat: pos.lat,
@@ -224,9 +247,14 @@ server.registerTool(
     }, 1000);
 
     const etaMin = (totalSeconds / 60).toFixed(1);
+    const routeInfo =
+      route.source === "straight-line"
+        ? "straight-line (fallback)"
+        : `${route.source}, profile: ${profile}, ${route.points.length} waypoints`;
     return text(
       `Route simulation started.\n` +
-        `  Distance: ${(distM / 1000).toFixed(2)} km\n` +
+        `  Routing: ${routeInfo}\n` +
+        `  Distance: ${(route.distanceMeters / 1000).toFixed(2)} km\n` +
         `  Speed: ${(effectiveSpeed * 3.6).toFixed(1)} km/h (traffic x${trafficMultiplier})\n` +
         `  ETA: ${etaMin} min (${totalSeconds} steps at 1 Hz)`,
     );
@@ -237,7 +265,7 @@ server.registerTool(
 server.registerTool(
   "geo_simulate_jitter",
   {
-    description: "Simulate GPS noise/jitter at a location for testing accuracy handling. Accepts place names (geocoded via OpenStreetMap) or lat/lng coordinates.",
+    description: "Simulate GPS noise/jitter at a location for testing accuracy handling. Accepts place names (geocoded via configured provider) or lat/lng coordinates." + geocodeHint,
     inputSchema: {
       lat: z.number().optional().describe("Center latitude"),
       lng: z.number().optional().describe("Center longitude"),
@@ -329,7 +357,7 @@ server.registerTool(
 server.registerTool(
   "geo_test_geofence",
   {
-    description: "Test geofence enter/exit/bounce behavior at a location. Accepts place names (geocoded via OpenStreetMap) or lat/lng coordinates.",
+    description: "Test geofence enter/exit/bounce behavior at a location. Accepts place names (geocoded via configured provider) or lat/lng coordinates." + geocodeHint,
     inputSchema: {
       lat: z.number().optional().describe("Geofence center latitude"),
       lng: z.number().optional().describe("Geofence center longitude"),
