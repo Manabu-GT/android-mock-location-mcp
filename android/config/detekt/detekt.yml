@@ -1,0 +1,49 @@
+build:
+  maxIssues: 0
+
+config:
+  validation: true
+
+processors:
+  active: true
+
+style:
+  ForbiddenComment:
+    active: true
+    comments:
+      - reason: 'FIXME comments should be resolved before merging'
+        value: 'FIXME'
+      - reason: 'STOPSHIP comments must be resolved before release'
+        value: 'STOPSHIP'
+  MagicNumber:
+    active: true
+    ignorePropertyDeclaration: true
+    ignoreAnnotation: true
+  WildcardImport:
+    active: true
+  MaxLineLength:
+    active: true
+    maxLineLength: 120
+  ReturnCount:
+    active: false
+
+complexity:
+  LongMethod:
+    threshold: 60
+  LongParameterList:
+    functionThreshold: 8
+    ignoreAnnotated:
+      - 'Composable'
+  TooManyFunctions:
+    thresholdInClasses: 20
+    thresholdInFiles: 20
+
+naming:
+  FunctionNaming:
+    active: true
+    ignoreAnnotated:
+      - 'Composable'
+  MatchingDeclarationName:
+    active: false
+  TopLevelPropertyNaming:
+    active: true
