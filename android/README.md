@@ -24,7 +24,7 @@ cd android
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-**Prebuilt APK:** Download from [Releases](https://github.com/user/android-mock-location-mcp/releases) and install with `adb install -r <apk>`.
+**Prebuilt APK:** Download from [Releases](https://github.com/Manabu-GT/android-mock-location-mcp/releases) and install with `adb install -r <apk>`.
 
 ## Device Setup
 
