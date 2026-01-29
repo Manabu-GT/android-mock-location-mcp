@@ -290,6 +290,8 @@ server.registerTool(
     stopSimulation();
     let tick = 0;
     let driftAngle = Math.random() * 2 * Math.PI;
+    let canyonBad = false;
+    let canyonStreakLeft = 0;
 
     simulationTimer = setInterval(() => {
       tick++;
@@ -309,21 +311,27 @@ server.registerTool(
         const dist = Math.random() * radiusMeters;
         offsetLat = (Math.sin(angle) * dist) / mPerDegLat;
         offsetLng = (Math.cos(angle) * dist) / mPerDegLng;
+        acc = radiusMeters + Math.random() * radiusMeters;
       } else if (pattern === "drift") {
         driftAngle += (Math.random() - 0.5) * 0.3;
         const dist = (radiusMeters * tick) / durationSeconds;
         offsetLat = (Math.sin(driftAngle) * dist) / mPerDegLat;
         offsetLng = (Math.cos(driftAngle) * dist) / mPerDegLng;
+        acc = dist + Math.random() * radiusMeters;
       } else {
-        // urban_canyon: alternate accurate / inaccurate
-        if (tick % 2 === 0) {
-          acc = 3;
-          const dist = Math.random() * 3;
-          const angle = Math.random() * 2 * Math.PI;
-          offsetLat = (Math.sin(angle) * dist) / mPerDegLat;
-          offsetLng = (Math.cos(angle) * dist) / mPerDegLng;
+        // urban_canyon: streaks of good/bad GPS (3-5s each)
+        if (canyonStreakLeft <= 0) {
+          canyonBad = !canyonBad;
+          canyonStreakLeft = 3 + Math.floor(Math.random() * 3); // 3-5 ticks
+        }
+        canyonStreakLeft--;
+
+        if (!canyonBad) {
+          // Good GPS: send center with tight accuracy
+          acc = 3 + Math.random() * 2;
+          // fall through to sendCommand with offsetLat/offsetLng = 0
         } else {
-          acc = 50 + Math.random() * 30;
+          acc = radiusMeters + Math.random() * radiusMeters;
           const dist = radiusMeters + Math.random() * 30;
           const angle = Math.random() * 2 * Math.PI;
           offsetLat = (Math.sin(angle) * dist) / mPerDegLat;
