@@ -9,6 +9,8 @@ import { randomUUID } from "node:crypto";
 let socket: net.Socket | null = null;
 let connectedDeviceId: string | null = null;
 let socketBuffer = "";
+let autoReconnectAttempted = false;
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
 const pendingRequests = new Map<
   string,
@@ -77,6 +79,13 @@ export function sendCommand(command: Record<string, unknown>): Promise<unknown> 
 
 /** Set up ADB port forwarding and open a TCP socket to the agent. */
 export function connectToDevice(deviceId: string): void {
+  // Cancel any pending auto-reconnect so it doesn't clobber this connection
+  if (reconnectTimer !== null) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+  autoReconnectAttempted = false;
+
   if (!/^[a-zA-Z0-9._:\-]+$/.test(deviceId)) {
     throw new Error(`Invalid device ID: ${deviceId}`);
   }
@@ -124,14 +133,14 @@ function setupSocketHandlers(sock: net.Socket): void {
   });
 
   const cleanup = () => {
-    if (socket === null) return; // idempotent guard (error + close both fire)
+    if (socket !== sock) return; // only clean up if this socket is still current
     const previousDeviceId = connectedDeviceId;
     for (const [id, entry] of pendingRequests) {
       clearTimeout(entry.timer);
       entry.reject(
         new Error(
           "Socket closed. The device may have disconnected. " +
-            "Auto-reconnect will be attempted. If it fails, call geo_connect_device again.",
+            "Auto-reconnect will be attempted once. If it fails, call geo_connect_device again.",
         ),
       );
       pendingRequests.delete(id);
@@ -141,9 +150,11 @@ function setupSocketHandlers(sock: net.Socket): void {
 
     disconnectCallback?.();
 
-    // Auto-reconnect attempt
-    if (previousDeviceId) {
-      setTimeout(() => {
+    // Auto-reconnect once — avoid infinite retry loop on persistent failures
+    if (previousDeviceId && !autoReconnectAttempted) {
+      autoReconnectAttempted = true;
+      reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
         try {
           connectToDevice(previousDeviceId);
         } catch {
