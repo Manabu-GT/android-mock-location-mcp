@@ -24,22 +24,24 @@ jobs:
     steps:
       - name: Validate version format
         id: version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
-          VERSION="${{ inputs.version }}"
-          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+)?$ ]]; then
-            echo "::error::Invalid version format: $VERSION"
+          if [[ ! "$INPUT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+)?$ ]]; then
+            echo "::error::Invalid version format: $INPUT_VERSION"
             echo "Expected format: X.Y.Z or X.Y.Z-suffix (e.g., 0.1.0, 1.0.0-beta1)"
             exit 1
           fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version=$INPUT_VERSION" >> $GITHUB_OUTPUT
 
       - name: Checkout
         uses: actions/checkout@v6
 
       - name: Verify build.gradle.kts versionName matches
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
-          GRADLE_VERSION=$(grep -oP 'versionName\s*=\s*"\K[^"]+' android/app/build.gradle.kts)
-          INPUT_VERSION="${{ inputs.version }}"
+          GRADLE_VERSION=$(sed -n 's/.*versionName\s*=\s*"\([^"]*\)".*/\1/p' android/app/build.gradle.kts)
           if [[ "$GRADLE_VERSION" != "$INPUT_VERSION" ]]; then
             echo "::error::Version mismatch: build.gradle.kts has '$GRADLE_VERSION' but workflow input is '$INPUT_VERSION'"
             echo "Update android/app/build.gradle.kts versionName to '$INPUT_VERSION' before releasing."
