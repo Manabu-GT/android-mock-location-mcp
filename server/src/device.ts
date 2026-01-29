@@ -3,11 +3,13 @@
 import * as net from "node:net";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { startTracking } from "./adb-tracker.js";
 
 // ── State ────────────────────────────────────────────────────────────────────
 
 let socket: net.Socket | null = null;
 let connectedDeviceId: string | null = null;
+let targetDeviceId: string | null = null; // persists through disconnects for tracker-based reconnect
 let socketBuffer = "";
 let autoReconnectAttempted = false;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -87,6 +89,7 @@ export function connectToDevice(deviceId: string): void {
   // User-initiated connections reset the reconnect guard so the next
   // unexpected disconnect is eligible for one automatic retry.
   autoReconnectAttempted = false;
+  targetDeviceId = deviceId;
 
   openSocket(deviceId);
 }
@@ -122,6 +125,13 @@ function openSocket(deviceId: string): void {
 function setupSocketHandlers(sock: net.Socket): void {
   socketBuffer = "";
 
+  // Any successful connection (user-initiated, immediate retry, or
+  // tracker-based) resets the guard so the next unexpected disconnect
+  // is eligible for an immediate retry.
+  sock.on("connect", () => {
+    autoReconnectAttempted = false;
+  });
+
   sock.on("data", (data) => {
     socketBuffer += data.toString();
     const lines = socketBuffer.split("\n");
@@ -151,7 +161,7 @@ function setupSocketHandlers(sock: net.Socket): void {
       entry.reject(
         new Error(
           "Socket closed. The device may have disconnected. " +
-            "Auto-reconnect will be attempted once. If it fails, call geo_connect_device again.",
+            "Reconnection will be attempted automatically when the device is available.",
         ),
       );
       pendingRequests.delete(id);
@@ -185,3 +195,27 @@ function setupSocketHandlers(sock: net.Socket): void {
   });
   sock.on("close", cleanup);
 }
+
+// ── ADB device tracker ─────────────────────────────────────────────────────
+//
+// Watches for device attach/detach via the ADB server's track-devices protocol.
+// When the target device reappears (e.g. USB cable re-plugged), we
+// automatically re-establish the socket connection so the user does not need
+// to call geo_connect_device again.
+
+startTracking(({ deviceId, state }) => {
+  if (state === "device" && deviceId === targetDeviceId && !isConnected()) {
+    // Small delay to let ADB fully initialise the device connection after
+    // the physical attach event.
+    setTimeout(() => {
+      if (isConnected() || targetDeviceId !== deviceId) return;
+      try {
+        openSocket(deviceId);
+      } catch (err) {
+        console.error(
+          `ADB tracker: reconnect failed for ${deviceId}: ${err instanceof Error ? err.message : err}`,
+        );
+      }
+    }, 1_000);
+  }
+});
