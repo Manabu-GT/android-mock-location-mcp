@@ -41,14 +41,28 @@ export function listDevices(): string {
 export function sendCommand(command: Record<string, unknown>): Promise<unknown> {
   const sock = socket;
   if (!sock || sock.destroyed) {
-    return Promise.reject(new Error("Not connected to device. Use geo_connect_device first."));
+    return Promise.reject(
+      new Error(
+        "Not connected to device. Troubleshooting: " +
+          "(1) Call geo_connect_device with the device serial from geo_list_devices. " +
+          "(2) Verify the GeoMCP Agent service is running in the app (green indicator). " +
+          "(3) Check adb port forwarding: run `adb forward tcp:5005 tcp:5005`.",
+      ),
+    );
   }
   const id = randomUUID();
   const msg = { ...command, id };
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       pendingRequests.delete(id);
-      reject(new Error("Command timed out (5s)"));
+      reject(
+        new Error(
+          "Command timed out (5s). Troubleshooting: " +
+            "(1) Verify the GeoMCP Agent service is running in the app (green indicator). " +
+            "(2) Restart adb port forwarding: `adb forward tcp:5005 tcp:5005`. " +
+            "(3) Check agent logs: `adb logcat -s GeoMCP`.",
+        ),
+      );
     }, 5000);
     pendingRequests.set(id, { resolve, reject, timer });
     try {
@@ -114,7 +128,12 @@ function setupSocketHandlers(sock: net.Socket): void {
     const previousDeviceId = connectedDeviceId;
     for (const [id, entry] of pendingRequests) {
       clearTimeout(entry.timer);
-      entry.reject(new Error("Socket closed"));
+      entry.reject(
+        new Error(
+          "Socket closed. The device may have disconnected. " +
+            "Auto-reconnect will be attempted. If it fails, call geo_connect_device again.",
+        ),
+      );
       pendingRequests.delete(id);
     }
     socket = null;
