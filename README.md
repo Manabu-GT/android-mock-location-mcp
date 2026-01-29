@@ -76,7 +76,6 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) o
 }
 ```
 
-For provider options (Google, Mapbox), see [Server Configuration](server/README.md#configuration).
 </details>
 
 <details>
@@ -99,6 +98,8 @@ Go to Settings → MCP → Add Server:
 claude mcp add android-mock-location-mcp -- npx -y android-mock-location-mcp
 ```
 </details>
+
+For provider options (Google, Mapbox), see [Server Configuration](server/README.md#configuration).
 
 ### 3. Install the Android Agent
 
