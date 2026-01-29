@@ -220,7 +220,16 @@ Any command may return an error instead of its normal response.
 
 The MCP server can automatically start the agent service via ADB when `geo_connect_device` detects that the service is not running. This eliminates the need for the user to manually open the app and tap "Start Service".
 
-**Mechanism**: The server launches `MainActivity` with an intent extra:
+**Mechanism**: The server performs two steps via ADB:
+
+1. **Device setup** — grants permissions and sets the mock location app:
+```
+adb -s <deviceId> shell pm grant com.ms.square.geomcpagent android.permission.ACCESS_FINE_LOCATION
+adb -s <deviceId> shell pm grant com.ms.square.geomcpagent android.permission.ACCESS_COARSE_LOCATION
+adb -s <deviceId> shell appops set com.ms.square.geomcpagent android:mock_location allow
+```
+
+2. **Service launch** — starts the activity with auto-start flag:
 ```
 adb -s <deviceId> shell am start -n com.ms.square.geomcpagent/.MainActivity --ez auto_start_service true
 ```
@@ -229,14 +238,16 @@ The activity handles this flag and starts `MockLocationService` automatically.
 
 **Prerequisites** (must be completed once, manually):
 1. The app must be installed on the device
-2. Location permissions must have been granted (open the app once to trigger the permission prompt)
-3. The app must be selected as the mock location app in Developer Options
+2. Developer Options must be enabled (Settings > About Phone > tap Build Number 7 times)
+
+Note: Location permissions and mock location app selection are now handled automatically via ADB during the auto-start flow.
 
 **Flow**:
 1. `geo_connect_device` first attempts a direct TCP connection (service may already be running)
-2. If the connection fails, it sends the auto-start intent via ADB
-3. Waits 2 seconds for service initialization, then polls up to 5 times (1 second apart)
-4. Returns success if connection is established, or a troubleshooting message if not
+2. If the connection fails, it runs device setup (permissions + mock location app) via ADB
+3. Launches the agent activity with auto-start flag
+4. Waits 2 seconds for service initialization, then polls up to 5 times (1 second apart)
+5. Returns success if connection is established, or a troubleshooting message if not
 
 ## Implementation Notes
 
