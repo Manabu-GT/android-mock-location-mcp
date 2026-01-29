@@ -14,7 +14,7 @@ android {
     minSdk = libs.versions.androidMinSdk.get().toInt()
     targetSdk = libs.versions.androidTargetSdk.get().toInt()
     versionName = "0.1.0"
-    versionCode = versionName!!.split(".").let {
+    versionCode = versionName!!.substringBefore("-").split(".").let {
       it[0].toInt() * 10000 + it[1].toInt() * 100 + it[2].toInt()
     }
   }
