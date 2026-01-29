@@ -84,8 +84,19 @@ export function connectToDevice(deviceId: string): void {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;
   }
+  // User-initiated connections reset the reconnect guard so the next
+  // unexpected disconnect is eligible for one automatic retry.
   autoReconnectAttempted = false;
 
+  openSocket(deviceId);
+}
+
+/**
+ * Core connection logic shared by public connectToDevice and the internal
+ * auto-reconnect path.  Does NOT touch autoReconnectAttempted — callers
+ * decide whether the guard should be reset.
+ */
+function openSocket(deviceId: string): void {
   if (!/^[a-zA-Z0-9._:\-]+$/.test(deviceId)) {
     throw new Error(`Invalid device ID: ${deviceId}`);
   }
@@ -150,20 +161,27 @@ function setupSocketHandlers(sock: net.Socket): void {
 
     disconnectCallback?.();
 
-    // Auto-reconnect once — avoid infinite retry loop on persistent failures
+    // Auto-reconnect once — avoid infinite retry loop on persistent failures.
+    // Uses openSocket (not connectToDevice) so autoReconnectAttempted stays
+    // true, preventing further retries if this attempt also fails.
     if (previousDeviceId && !autoReconnectAttempted) {
       autoReconnectAttempted = true;
       reconnectTimer = setTimeout(() => {
         reconnectTimer = null;
         try {
-          connectToDevice(previousDeviceId);
-        } catch {
-          // Reconnection failed — user must call geo_connect_device manually
+          openSocket(previousDeviceId);
+        } catch (err) {
+          console.error(
+            `Auto-reconnect failed for ${previousDeviceId}: ${err instanceof Error ? err.message : err}`,
+          );
         }
       }, 1000);
     }
   };
 
-  sock.on("error", cleanup);
+  sock.on("error", (err) => {
+    console.error(`Socket error: ${err.message}`);
+    cleanup();
+  });
   sock.on("close", cleanup);
 }
