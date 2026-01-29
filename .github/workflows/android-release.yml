@@ -33,6 +33,20 @@ jobs:
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Verify build.gradle.kts versionName matches
+        run: |
+          GRADLE_VERSION=$(grep -oP 'versionName\s*=\s*"\K[^"]+' android/app/build.gradle.kts)
+          INPUT_VERSION="${{ inputs.version }}"
+          if [[ "$GRADLE_VERSION" != "$INPUT_VERSION" ]]; then
+            echo "::error::Version mismatch: build.gradle.kts has '$GRADLE_VERSION' but workflow input is '$INPUT_VERSION'"
+            echo "Update android/app/build.gradle.kts versionName to '$INPUT_VERSION' before releasing."
+            exit 1
+          fi
+          echo "Version verified: $GRADLE_VERSION"
+
   android-build:
     name: Build release APK
     runs-on: ubuntu-latest

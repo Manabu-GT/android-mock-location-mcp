@@ -33,6 +33,20 @@ jobs:
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Verify package.json version matches
+        run: |
+          PKG_VERSION=$(node -p "require('./server/package.json').version")
+          INPUT_VERSION="${{ inputs.version }}"
+          if [[ "$PKG_VERSION" != "$INPUT_VERSION" ]]; then
+            echo "::error::Version mismatch: package.json has '$PKG_VERSION' but workflow input is '$INPUT_VERSION'"
+            echo "Update server/package.json to '$INPUT_VERSION' before releasing."
+            exit 1
+          fi
+          echo "Version verified: $PKG_VERSION"
+
   server-publish:
     name: Publish to npm
     runs-on: ubuntu-latest
