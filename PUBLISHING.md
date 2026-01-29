@@ -51,10 +51,10 @@ The workflow will:
 
 ## Version Files
 
-| Component | File | Field |
-|-----------|------|-------|
-| Server | `server/package.json` | `"version"` |
-| Android | `android/app/build.gradle.kts` | `versionName` |
+| Component | File                           | Field         |
+|-----------|--------------------------------|---------------|
+| Server    | `server/package.json`          | `"version"`   |
+| Android   | `android/app/build.gradle.kts` | `versionName` |
 
 `versionCode` is automatically derived from `versionName` using the formula `major * 10000 + minor * 100 + patch` (e.g., `0.2.0` → `200`, `1.0.0` → `10000`). Only `versionName` needs to be updated manually.
 
@@ -67,12 +67,12 @@ Both must be updated **before** triggering the release workflow. The CI validate
 
 ## CI Workflows
 
-| Workflow | File | Trigger | Purpose |
-|----------|------|---------|---------|
-| Server CI | `server-ci.yml` | Push/PR to `main` (server changes) | Build + typecheck on Node 18/20/22 |
-| Android CI | `android-ci.yml` | Push/PR to `main` (android changes) | Lint (Spotless + Detekt) + build debug APK |
-| Release Server | `server-release.yml` | Manual dispatch | Publish to npm + GitHub Release |
-| Release Android | `android-release.yml` | Manual dispatch | Build release APK + GitHub Release |
+| Workflow        | File                  | Trigger                             | Purpose                                    |
+|-----------------|-----------------------|-------------------------------------|--------------------------------------------|
+| Server CI       | `server-ci.yml`       | Push/PR to `main` (server changes)  | Build + typecheck on Node 18/20/22         |
+| Android CI      | `android-ci.yml`      | Push/PR to `main` (android changes) | Lint (Spotless + Detekt) + build debug APK |
+| Release Server  | `server-release.yml`  | Manual dispatch                     | Publish to npm + GitHub Release            |
+| Release Android | `android-release.yml` | Manual dispatch                     | Build release APK + GitHub Release         |
 
 Release workflows are restricted to the repository owner.
 
