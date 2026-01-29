@@ -56,9 +56,7 @@ This project has two components — an **MCP server** (TypeScript/Node.js) and a
 
 ### Reporting Bugs
 
-Before creating an issue:
-1. Search [existing issues](https://github.com/Manabu-GT/android-mock-location-mcp/issues) to avoid duplicates
-2. Check [GitHub Discussions](https://github.com/Manabu-GT/android-mock-location-mcp/discussions) for known problems
+Before creating an issue, search [existing issues](https://github.com/Manabu-GT/android-mock-location-mcp/issues) to avoid duplicates.
 
 When ready, [file a bug report](https://github.com/Manabu-GT/android-mock-location-mcp/issues/new). Please specify which component is affected (server, Android, or both).
 
@@ -170,7 +168,6 @@ Make sure the relevant CI checks pass before requesting review.
 
 ## Questions?
 
-- Open a [GitHub Discussion](https://github.com/Manabu-GT/android-mock-location-mcp/discussions) for questions
-- Check [existing issues](https://github.com/Manabu-GT/android-mock-location-mcp/issues) for known problems
+If you have questions, feel free to [open an issue](https://github.com/Manabu-GT/android-mock-location-mcp/issues/new).
 
 Thank you for contributing!
