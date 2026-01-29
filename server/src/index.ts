@@ -6,6 +6,7 @@ import { z } from "zod";
 import { geocodePlace } from "./geocode.js";
 import { haversineDistance } from "./geo-math.js";
 import { getRoute, interpolateAlongRoute, bearingAlongRoute } from "./routing.js";
+import { createRequire } from "node:module";
 import {
   sendCommand,
   connectToDevice,
@@ -14,6 +15,9 @@ import {
   isConnected,
   onDisconnect,
 } from "./device.js";
+
+const require = createRequire(import.meta.url);
+const { version } = require("../package.json") as { version: string };
 
 // ── Simulation State ─────────────────────────────────────────────────────────
 
@@ -44,7 +48,7 @@ const geocodeHint = isOsmProvider
 
 const server = new McpServer({
   name: "android-mock-location-mcp",
-  version: "0.1.0",
+  version,
 });
 
 // 1. geo_list_devices
