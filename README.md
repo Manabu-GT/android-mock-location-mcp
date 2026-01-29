@@ -23,15 +23,7 @@ Testing location-aware apps is painful. You either:
 - Write complex ADB scripts with hardcoded coordinates
 - Use clunky GUI mock location apps
 
-This MCP server lets you control device location from your IDE. Say "drive to the airport" instead of copy-pasting coordinates.
-
-## How It Differs from Other Geo MCPs
-
-| Server | Purpose | Example |
-|--------|---------|---------|
-| [MCP-Geo](https://github.com/webcoderz/MCP-Geo) | Geocoding (address → coords) | "What's the lat/lng of Tokyo Station?" |
-| [gis-mcp](https://github.com/mahdin75/gis-mcp) | GIS operations (buffer, intersect) | "Buffer this polygon by 500m" |
-| **android-mock-location-mcp** | **Device GPS control** | "Move my test phone to Times Square" |
+This MCP server lets you control device location from Android Studio/Cursor/Claude Code/Codex..etc. Say "drive to the airport" instead of copy-pasting coordinates.
 
 This server **controls your Android device's GPS** with built-in geocoding and street-level routing. No extra tools needed.
 
@@ -66,11 +58,6 @@ This server **controls your Android device's GPS** with built-in geocoding and s
 npx android-mock-location-mcp
 ```
 
-Or install globally:
-```bash
-npm install -g android-mock-location-mcp
-```
-
 ### 2. Configure Your MCP Client
 
 <details>
@@ -89,22 +76,6 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) o
 }
 ```
 
-To use a different provider (see [Provider Configuration](#provider-configuration)):
-
-```json
-{
-  "mcpServers": {
-    "android-mock-location-mcp": {
-      "command": "npx",
-      "args": ["-y", "android-mock-location-mcp"],
-      "env": {
-        "PROVIDER": "google",
-        "GOOGLE_API_KEY": "AIza..."
-      }
-    }
-  }
-}
-```
 </details>
 
 <details>
@@ -128,21 +99,16 @@ claude mcp add android-mock-location-mcp -- npx -y android-mock-location-mcp
 ```
 </details>
 
-### 3. Install the Android Agent
+For provider options (Google, Mapbox), see [Server Configuration](server/README.md#configuration).
 
-**Option A: Download APK** (easiest)
+### 3. Install the Android Agent
 
 Download the latest APK from [Releases](https://github.com/Manabu-GT/android-mock-location-mcp/releases) and install:
 ```bash
 adb install -r android-mock-location-mcp-agent.apk
 ```
 
-**Option B: Build from source**
-
-```bash
-cd android
-./gradlew installDebug
-```
+To build from source, see [android/README.md](android/README.md#build-and-install).
 
 ### 4. Enable Mock Location
 
@@ -158,8 +124,6 @@ See [android/README.md](android/README.md) for detailed setup and troubleshootin
 In your MCP client:
 
 ```
-> List Android devices
-> Connect to emulator-5554
 > Set location to Times Square New York
 > Drive from here to SFO airport at 60 km/h
 ```
@@ -181,17 +145,9 @@ For full parameter reference, see [server/README.md](server/README.md#tool-refer
 
 ## Provider Configuration
 
-Geocoding and routing use a configurable provider, set via the `PROVIDER` environment variable in your MCP client config.
+Works out of the box with **OpenStreetMap** (free, no API key). Also supports **Google** and **Mapbox** providers for full walking/cycling routing.
 
-| `PROVIDER` | Geocoding | Routing | Profiles | API Key | Cost |
-|------------|-----------|---------|----------|---------|------|
-| `osm` (default) | Nominatim | OSRM | `car` only* | None | Free (rate-limited) |
-| `google` | Google Geocoding API | Google Routes API | `car`, `foot`, `bike` | `GOOGLE_API_KEY` | Paid (free tier) |
-| `mapbox` | Mapbox Geocoding | Mapbox Directions | `car`, `foot`, `bike` | `MAPBOX_ACCESS_TOKEN` | Paid (free tier) |
-
-**\*OSRM limitation:** The public OSRM server only supports the `car` profile. `foot`/`bike` silently return driving routes. Use `google` or `mapbox` for walking/cycling.
-
-For full provider reference, env var details, and how to add a custom provider, see [server/README.md](server/README.md#configuration).
+For provider setup, env vars, and limitations, see [server/README.md](server/README.md#configuration).
 
 ## Examples
 
@@ -201,17 +157,14 @@ For full provider reference, env var details, and how to add a custom provider, 
 "Move to Times Square"
 
 # Route simulation
-"Drive from SFO to downtown SF at 40 km/h"
-"Walk to Whole Foods"
-"Simulate a commute with heavy traffic"
+"Drive from SFO to downtown SF, simulate a commute with heavy traffic"
+"Walk to the nearest Whole Foods"
 
 # GPS testing
-"Simulate bad GPS for 30 seconds"
-"Add urban canyon jitter with 50m radius"
+"Simulate bad GPS for 30 seconds, add urban canyon jitter with 50m radius"
 
 # Geofence testing
-"Test entering the Starbucks geofence"
-"Bounce in and out of a 100m radius 5 times"
+"Test entering the nearest Starbucks geofence, bounce in and out of a 100m radius 5 times"
 ```
 
 ## Documentation
