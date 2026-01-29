@@ -13,8 +13,14 @@ android {
     applicationId = "com.ms.square.geomcpagent"
     minSdk = libs.versions.androidMinSdk.get().toInt()
     targetSdk = libs.versions.androidTargetSdk.get().toInt()
-    versionCode = 1
     versionName = "0.1.0"
+    // Derives versionCode from versionName: major*10000 + minor*100 + patch
+    // Assumes minor and patch stay below 100; pre-release suffixes are stripped
+    versionCode = versionName?.let { name ->
+      val parts = name.substringBefore("-").split(".")
+      require(parts.size == 3) { "versionName must be X.Y.Z format, got: $name" }
+      (parts[0].toInt() * 10000 + parts[1].toInt() * 100 + parts[2].toInt()).coerceAtLeast(1)
+    } ?: error("versionName must be set")
   }
 
   buildTypes {
