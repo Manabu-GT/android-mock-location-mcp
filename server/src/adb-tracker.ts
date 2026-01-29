@@ -33,8 +33,12 @@ let active = false;
 
 // ── Public API ───────────────────────────────────────────────────────────────
 
-/** Start monitoring ADB device state changes. */
+/** Start monitoring ADB device state changes. Safe to call multiple times. */
 export function startTracking(listener: DeviceEventListener): void {
+  if (active) {
+    eventListener = listener;
+    return;
+  }
   active = true;
   eventListener = listener;
   connectToAdb();
@@ -55,6 +59,11 @@ export function stopTracking(): void {
   knownDevices.clear();
 }
 
+/** Check current tracker state for a device (used by device.ts to avoid stuck-state). */
+export function getKnownDeviceState(deviceId: string): string | undefined {
+  return knownDevices.get(deviceId);
+}
+
 // ── ADB server connection ────────────────────────────────────────────────────
 //
 // Protocol: connect to TCP 5037, send a length-prefixed command, receive OKAY
@@ -64,6 +73,16 @@ export function stopTracking(): void {
 function connectToAdb(): void {
   if (!active) return;
 
+  // Clear stale device cache so the first snapshot from a new ADB connection
+  // generates events for all devices.
+  knownDevices.clear();
+
+  // Destroy previous socket before creating a new one to prevent leaks.
+  if (trackerSocket !== null) {
+    trackerSocket.destroy();
+    trackerSocket = null;
+  }
+
   const sock = new net.Socket();
   trackerSocket = sock;
 
@@ -71,6 +90,7 @@ function connectToAdb(): void {
   let receivedOkay = false;
   let expectingLength = true;
   let payloadLength = 0;
+  let cleanupCalled = false;
 
   sock.connect({ host: "127.0.0.1", port: ADB_SERVER_PORT }, () => {
     const cmd = "host:track-devices";
@@ -99,6 +119,14 @@ function connectToAdb(): void {
       if (expectingLength) {
         if (buffer.length < 4) break;
         payloadLength = parseInt(buffer.slice(0, 4), 16);
+
+        // Guard against malformed length prefix to prevent infinite loop.
+        if (Number.isNaN(payloadLength) || payloadLength < 0) {
+          console.error("ADB tracker: malformed length prefix, disconnecting");
+          sock.destroy();
+          return;
+        }
+
         buffer = buffer.slice(4);
         expectingLength = false;
       }
@@ -113,13 +141,15 @@ function connectToAdb(): void {
   });
 
   const handleGone = () => {
+    if (cleanupCalled) return;
+    cleanupCalled = true;
     if (trackerSocket !== sock) return;
     trackerSocket = null;
     scheduleRetry();
   };
 
   sock.on("error", () => handleGone());
-  sock.on("close", handleGone);
+  sock.on("close", () => handleGone());
 }
 
 function scheduleRetry(): void {
@@ -135,6 +165,18 @@ function scheduleRetry(): void {
 // Each time the ADB server sends an updated device list we diff it against
 // the previously known set and emit events for new, changed, and removed
 // devices.
+
+/** Safely emit to the listener — exceptions are caught to protect the tracker. */
+function emitEvent(event: DeviceEvent): void {
+  try {
+    eventListener?.(event);
+  } catch (err) {
+    console.error(
+      "ADB tracker: listener error:",
+      err instanceof Error ? err.message : err,
+    );
+  }
+}
 
 function processDeviceList(payload: string): void {
   const updated = new Map<string, string>();
@@ -152,13 +194,13 @@ function processDeviceList(payload: string): void {
     for (const [id, state] of updated) {
       const previous = knownDevices.get(id) ?? null;
       if (previous !== state) {
-        eventListener({ deviceId: id, state, previous });
+        emitEvent({ deviceId: id, state, previous });
       }
     }
     // Disappeared devices.
     for (const [id, previousState] of knownDevices) {
       if (!updated.has(id)) {
-        eventListener({ deviceId: id, state: "offline", previous: previousState });
+        emitEvent({ deviceId: id, state: "offline", previous: previousState });
       }
     }
   }
