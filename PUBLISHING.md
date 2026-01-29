@@ -33,7 +33,7 @@ The workflow will:
 
 **Steps:**
 
-1. Update `versionName` (and optionally `versionCode`) in `android/app/build.gradle.kts`
+1. Update `versionName` in `android/app/build.gradle.kts` (`versionCode` is auto-derived — see [Version Files](#version-files))
 2. Commit and push to `main`:
    ```bash
    git add android/app/build.gradle.kts
@@ -54,7 +54,9 @@ The workflow will:
 | Component | File | Field |
 |-----------|------|-------|
 | Server | `server/package.json` | `"version"` |
-| Android | `android/app/build.gradle.kts` | `versionName` (and `versionCode`) |
+| Android | `android/app/build.gradle.kts` | `versionName` |
+
+`versionCode` is automatically derived from `versionName` using the formula `major * 10000 + minor * 100 + patch` (e.g., `0.2.0` → `200`, `1.0.0` → `10000`). Only `versionName` needs to be updated manually.
 
 Both must be updated **before** triggering the release workflow. The CI validates that the version in the file matches the workflow input to prevent mismatches.
 
