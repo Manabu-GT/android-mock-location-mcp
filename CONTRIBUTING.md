@@ -87,13 +87,13 @@ Open a [feature request issue](https://github.com/Manabu-GT/android-mock-locatio
 
 ## Branch Naming
 
-| Prefix | Use Case |
-|--------|----------|
-| `feature/` | New features |
-| `fix/` | Bug fixes |
-| `docs/` | Documentation only |
-| `refactor/` | Code restructuring |
-| `test/` | Test additions |
+| Prefix      | Use Case            |
+|-------------|---------------------|
+| `feature/`  | New features        |
+| `fix/`      | Bug fixes           |
+| `docs/`     | Documentation only  |
+| `refactor/` | Code restructuring  |
+| `test/`     | Test additions      |
 
 Example: `feature/add-mapbox-isochrone`, `fix/socket-reconnect-crash`
 
@@ -147,11 +147,11 @@ Both `server/src/geocode.ts` and `server/src/routing.ts` use the same pattern:
 
 ## Project Structure
 
-| Directory | Description |
-|-----------|-------------|
-| `server/` | MCP server — TypeScript/Node.js, exposes 8 location tools via MCP protocol |
-| `android/` | Android agent — Kotlin/Compose app, foreground service that sets mock locations |
-| `protocol/` | JSON protocol spec for server ↔ agent communication |
+| Directory    | Description                                                                    |
+|--------------|--------------------------------------------------------------------------------|
+| `server/`    | MCP server — TypeScript/Node.js, exposes 8 location tools via MCP protocol     |
+| `android/`   | Android agent — Kotlin/Compose app, foreground service that sets mock locations |
+| `protocol/`  | JSON protocol spec for server ↔ agent communication                            |
 
 See [CLAUDE.md](CLAUDE.md) for detailed file-level structure and architecture notes.
 
@@ -159,10 +159,10 @@ See [CLAUDE.md](CLAUDE.md) for detailed file-level structure and architecture no
 
 Pull requests targeting `main` run the following checks automatically:
 
-| Workflow | Trigger | What it checks |
-|----------|---------|----------------|
-| Server CI | Changes in `server/` | Build + typecheck on Node 18, 20, 22 |
-| Android CI | Changes in `android/` | Spotless + Detekt lint, debug APK build |
+| Workflow   | Trigger                 | What it checks                          |
+|------------|-------------------------|-----------------------------------------|
+| Server CI  | Changes in `server/`    | Build + typecheck on Node 18, 20, 22    |
+| Android CI | Changes in `android/`   | Spotless + Detekt lint, debug APK build |
 
 Make sure the relevant CI checks pass before requesting review.
 
