@@ -16,6 +16,7 @@ import java.io.IOException
 import java.io.InputStreamReader
 import java.io.OutputStreamWriter
 import java.net.InetAddress
+import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
 
@@ -40,7 +41,10 @@ internal class AgentSocketServer(
   fun start() {
     scope.launch {
       try {
-        serverSocket = ServerSocket(port, 1, InetAddress.getByName("127.0.0.1"))
+        serverSocket = ServerSocket().apply {
+          reuseAddress = true
+          bind(InetSocketAddress(InetAddress.getByName("127.0.0.1"), port), 1)
+        }
 
         while (true) {
           val socket = serverSocket?.accept() ?: break
