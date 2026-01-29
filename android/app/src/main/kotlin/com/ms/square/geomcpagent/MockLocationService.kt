@@ -285,6 +285,10 @@ class MockLocationService : Service() {
         Logger.e("Location emit loop failed", e)
         _state.update { it.copy(isMocking = false, lat = 0.0, lng = 0.0) }
         updateNotification("Mock location error")
+      } catch (e: IllegalArgumentException) {
+        Logger.e("Location emit loop failed", e)
+        _state.update { it.copy(isMocking = false, lat = 0.0, lng = 0.0) }
+        updateNotification("Mock location error")
       }
     }
   }

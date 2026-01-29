@@ -53,9 +53,17 @@ internal class AgentSocketServer(
   }
 
   fun stop() {
-    clientSocket?.close()
+    try {
+      clientSocket?.close()
+    } catch (e: IOException) {
+      Logger.w("Failed to close client socket", e)
+    }
     clientSocket = null
-    serverSocket?.close()
+    try {
+      serverSocket?.close()
+    } catch (e: IOException) {
+      Logger.w("Failed to close server socket", e)
+    }
     serverSocket = null
     _connected.value = false
   }
@@ -86,9 +94,15 @@ internal class AgentSocketServer(
     }
   }
 
+  @Suppress("TooGenericExceptionCaught") // Intentional fault boundary to keep connection alive
   private fun processCommand(jsonLine: String): String = try {
     val request = json.decodeFromString<AgentRequest>(jsonLine)
-    val response = commandHandler(request)
+    val response = try {
+      commandHandler(request)
+    } catch (e: RuntimeException) {
+      Logger.w("Failed to handle request", e)
+      AgentResponse(id = request.id, success = false, error = "Failed to handle request: ${e.message}")
+    }
     json.encodeToString(response)
   } catch (e: SerializationException) {
     Logger.w("Failed to parse request", e)
