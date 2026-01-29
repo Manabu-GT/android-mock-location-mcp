@@ -96,6 +96,55 @@ export function sendCommand(command: Record<string, unknown>): Promise<unknown> 
   });
 }
 
+const AGENT_PACKAGE = "com.ms.square.geomcpagent";
+
+/**
+ * Ensure the device is set up for mock location: grant location permissions
+ * and set this app as the mock location provider via AppOps.
+ * All commands are idempotent — safe to call on every connection attempt.
+ */
+export function ensureDeviceSetup(deviceId: string): void {
+  if (!/^[a-zA-Z0-9._:\-]+$/.test(deviceId)) {
+    throw new Error(`Invalid device ID: ${deviceId}`);
+  }
+  const adb = (args: string[]) =>
+    execFileSync("adb", ["-s", deviceId, ...args], { encoding: "utf-8" });
+
+  // Grant location permissions (required for mock location provider)
+  adb(["shell", "pm", "grant", AGENT_PACKAGE, "android.permission.ACCESS_FINE_LOCATION"]);
+  adb(["shell", "pm", "grant", AGENT_PACKAGE, "android.permission.ACCESS_COARSE_LOCATION"]);
+
+  // Set this app as the mock location provider (equivalent to Developer Options selection)
+  adb(["shell", "appops", "set", AGENT_PACKAGE, "android:mock_location", "allow"]);
+}
+
+/**
+ * Launch the Android agent activity with auto-start flag via ADB.
+ * The activity starts the MockLocationService automatically when this flag is set,
+ * eliminating the need for the user to manually tap "Start Service".
+ */
+export function startAgentService(deviceId: string): void {
+  if (!/^[a-zA-Z0-9._:\-]+$/.test(deviceId)) {
+    throw new Error(`Invalid device ID: ${deviceId}`);
+  }
+  execFileSync(
+    "adb",
+    [
+      "-s",
+      deviceId,
+      "shell",
+      "am",
+      "start",
+      "-n",
+      `${AGENT_PACKAGE}/.MainActivity`,
+      "--ez",
+      "auto_start_service",
+      "true",
+    ],
+    { encoding: "utf-8" },
+  );
+}
+
 /**
  * Set up ADB port forwarding and open a TCP socket to the agent.
  * Resolves when the socket connects; rejects on failure or timeout.

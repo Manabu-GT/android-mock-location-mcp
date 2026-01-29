@@ -71,6 +71,8 @@ class MainActivity : ComponentActivity() {
       requestPermissions()
     }
 
+    handleAutoStartIntent(intent)
+
     setContent {
       val serviceState by service?.state?.collectAsStateWithLifecycle()
         ?: remember { mutableStateOf(ServiceState()) }
@@ -94,13 +96,20 @@ class MainActivity : ComponentActivity() {
     }
   }
 
+  override fun onNewIntent(intent: Intent) {
+    super.onNewIntent(intent)
+    handleAutoStartIntent(intent)
+  }
+
   override fun onStart() {
     super.onStart()
     // Re-check in case user granted via Settings or selected mock location app
     checkPermissions()
     checkMockLocationAppSelected()
     // Try to bind — succeeds only if service is already running (flag 0 = don't auto-create)
-    bindService(Intent(this, MockLocationService::class.java), connection, 0)
+    if (!bound) {
+      bindService(Intent(this, MockLocationService::class.java), connection, 0)
+    }
   }
 
   override fun onStop() {
@@ -139,6 +148,21 @@ class MainActivity : ComponentActivity() {
     permissionLauncher.launch(permissions.toTypedArray())
   }
 
+  /**
+   * Handle an intent with "auto_start_service" boolean extra.
+   * Sent via ADB: adb shell am start -n .../.MainActivity --ez auto_start_service true
+   */
+  private fun handleAutoStartIntent(intent: Intent?) {
+    if (intent?.getBooleanExtra("auto_start_service", false) == true) {
+      if (permissionsGranted) {
+        Logger.i("Auto-starting mock location service via intent")
+        startMockService()
+      } else {
+        Logger.w("Cannot auto-start service: location permissions not granted")
+      }
+    }
+  }
+
   private fun startMockService() {
     if (!permissionsGranted) return
 
@@ -149,7 +173,9 @@ class MainActivity : ComponentActivity() {
       startService(intent)
     }
     // Bind to get the service reference
-    bindService(intent, connection, Context.BIND_AUTO_CREATE)
+    if (!bound) {
+      bindService(intent, connection, Context.BIND_AUTO_CREATE)
+    }
   }
 
   private fun stopMockService() {

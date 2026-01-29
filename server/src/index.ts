@@ -16,6 +16,8 @@ import {
   onDisconnect,
   initDevice,
   shutdownDevice,
+  startAgentService,
+  ensureDeviceSetup,
 } from "./device.js";
 
 const require = createRequire(import.meta.url);
@@ -95,19 +97,61 @@ server.registerTool("geo_list_devices", { description: "List connected Android d
 server.registerTool(
   "geo_connect_device",
   {
-    description: "Connect to an Android device for mock location control",
+    description: "Connect to an Android device for mock location control. Automatically starts the agent service if it is not already running.",
     inputSchema: { deviceId: z.string().describe("Device serial from geo_list_devices, e.g. emulator-5554") },
   },
   async ({ deviceId }) => {
+    // Try connecting directly first — service may already be running
     try {
       await connectToDevice(deviceId);
-      // Verify with status ping
       const res = (await sendCommand({ type: "status" })) as { success?: boolean };
       if (res.success) return text(`Connected to ${deviceId}. Agent is running.`);
       return text(`Connected to ${deviceId}, but agent returned unexpected response.`);
-    } catch (err) {
-      return text(`Failed to connect to ${deviceId}: ${err instanceof Error ? err.message : String(err)}`);
+    } catch {
+      // Connection failed — fall through to auto-start
     }
+
+    // Auto-start: set up permissions/mock location app, then launch agent
+    try {
+      ensureDeviceSetup(deviceId);
+    } catch {
+      // Non-fatal: permissions may already be granted, or device may not support pm grant
+    }
+    try {
+      startAgentService(deviceId);
+    } catch (startErr) {
+      return text(
+        `Failed to connect to ${deviceId} and could not auto-start the agent service: ${startErr instanceof Error ? startErr.message : String(startErr)}\n` +
+          "Ensure the GeoMCP Agent app is installed on the device.",
+      );
+    }
+
+    // Poll for service readiness (service needs time to initialize socket server)
+    const maxRetries = 5;
+    const initialDelayMs = 2000;
+    const retryDelayMs = 1000;
+    await new Promise((r) => setTimeout(r, initialDelayMs));
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        await connectToDevice(deviceId);
+        const res = (await sendCommand({ type: "status" })) as { success?: boolean };
+        if (res.success) return text(`Connected to ${deviceId}. Agent service was auto-started.`);
+        return text(`Connected to ${deviceId} (auto-started), but agent returned unexpected response.`);
+      } catch {
+        if (attempt < maxRetries) {
+          await new Promise((r) => setTimeout(r, retryDelayMs));
+        }
+      }
+    }
+
+    return text(
+      `Auto-started agent on ${deviceId}, but could not establish connection.\n` +
+        "Troubleshooting:\n" +
+        "  (1) Open the app and ensure location permissions are granted.\n" +
+        "  (2) Verify the app is selected as mock location app in Developer Options.\n" +
+        "  (3) Check agent logs: adb logcat -s GeoMCP",
+    );
   },
 );
 

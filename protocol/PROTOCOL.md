@@ -216,6 +216,28 @@ Any command may return an error instead of its normal response.
 - **Missing or malformed `id`**: The agent returns an error response with `"id": null` and `"success": false`.
 - **Unknown command `type`**: The agent returns an error response with `"success": false` and an `"error"` string describing the unrecognized type.
 
+## Service Auto-Start
+
+The MCP server can automatically start the agent service via ADB when `geo_connect_device` detects that the service is not running. This eliminates the need for the user to manually open the app and tap "Start Service".
+
+**Mechanism**: The server launches `MainActivity` with an intent extra:
+```
+adb -s <deviceId> shell am start -n com.ms.square.geomcpagent/.MainActivity --ez auto_start_service true
+```
+
+The activity handles this flag and starts `MockLocationService` automatically.
+
+**Prerequisites** (must be completed once, manually):
+1. The app must be installed on the device
+2. Location permissions must have been granted (open the app once to trigger the permission prompt)
+3. The app must be selected as the mock location app in Developer Options
+
+**Flow**:
+1. `geo_connect_device` first attempts a direct TCP connection (service may already be running)
+2. If the connection fails, it sends the auto-start intent via ADB
+3. Waits 2 seconds for service initialization, then polls up to 5 times (1 second apart)
+4. Returns success if connection is established, or a troubleshooting message if not
+
 ## Implementation Notes
 
 - The Android agent sets mock locations via `LocationManager.setTestProviderLocation()`. The device must have **Developer Options** enabled and the agent selected as the **mock location app**.
