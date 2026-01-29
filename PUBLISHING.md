@@ -58,7 +58,7 @@ The workflow will:
 
 `versionCode` is automatically derived from `versionName` using the formula `major * 10000 + minor * 100 + patch` (e.g., `0.2.0` → `200`, `1.0.0` → `10000`). Only `versionName` needs to be updated manually.
 
-Both must be updated **before** triggering the release workflow. The CI validates that the version in the file matches the workflow input to prevent mismatches.
+Before triggering a release workflow, update the relevant version file for that component. The CI validates that the version in the file matches the workflow input to prevent mismatches.
 
 ## Tag Format
 
