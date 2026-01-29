@@ -15,8 +15,12 @@ import android.os.Binder
 import android.os.Build
 import android.os.IBinder
 import android.os.SystemClock
-import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.ms.square.geomcpagent.model.AgentRequest
+import com.ms.square.geomcpagent.model.AgentResponse
+import com.ms.square.geomcpagent.model.MockLocation
+import com.ms.square.geomcpagent.model.ServiceState
+import com.ms.square.geomcpagent.util.Logger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -26,77 +30,28 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.SerializationException
-import kotlinx.serialization.json.Json
-import java.io.BufferedReader
-import java.io.BufferedWriter
-import java.io.IOException
-import java.io.InputStreamReader
-import java.io.OutputStreamWriter
-import java.net.InetAddress
-import java.net.ServerSocket
-import java.net.Socket
 import kotlin.coroutines.cancellation.CancellationException
 
-@Serializable
-internal data class AgentRequest(
-  val id: String? = null,
-  val type: String,
-  val lat: Double = 0.0,
-  val lng: Double = 0.0,
-  val accuracy: Double = 3.0,
-  val altitude: Double = 0.0,
-  val speed: Double = 0.0,
-  val bearing: Double = 0.0,
-)
-
-@Serializable
-internal data class AgentResponse(
-  val id: String?,
-  val success: Boolean,
-  val lat: Double? = null,
-  val lng: Double? = null,
-  val active: Boolean? = null,
-  val error: String? = null,
-)
-
-internal data class ServiceState(
-  val isRunning: Boolean = false,
-  val isMocking: Boolean = false,
-  val lat: Double = 0.0,
-  val lng: Double = 0.0,
-)
-
-private data class MockLocation(
-  val lat: Double,
-  val lng: Double,
-  val accuracy: Double,
-  val altitude: Double,
-  val speed: Double,
-  val bearing: Double,
-)
+private const val NOTIFICATION_ID = 1
+private const val CHANNEL_ID = "geo_mcp_channel"
+private const val CHANNEL_NAME = "GeoMCP Agent"
+private const val PROVIDER_NAME = LocationManager.GPS_PROVIDER
+private const val PORT = 5005
+private const val MIN_LATITUDE = -90.0
+private const val MAX_LATITUDE = 90.0
+private const val MIN_LONGITUDE = -180.0
+private const val MAX_LONGITUDE = 180.0
+private const val LOCATION_UPDATE_INTERVAL_MS = 1_000L
 
 class MockLocationService : Service() {
 
   inner class LocalBinder : Binder() {
+    // Return this instance of MockLocationService so clients can call public/internal methods
     val service: MockLocationService get() = this@MockLocationService
-  }
-
-  companion object {
-    private const val TAG = "MockLocationService"
-    private const val NOTIFICATION_ID = 1
-    private const val CHANNEL_ID = "geo_mcp_channel"
-    private const val CHANNEL_NAME = "GeoMCP Agent"
-    private const val PROVIDER_NAME = LocationManager.GPS_PROVIDER
-    private const val PORT = 5005
-    private const val MIN_LATITUDE = -90.0
-    private const val MAX_LATITUDE = 90.0
-    private const val MIN_LONGITUDE = -180.0
-    private const val MAX_LONGITUDE = 180.0
-    private const val LOCATION_UPDATE_INTERVAL_MS = 1_000L
   }
 
   private val binder = LocalBinder()
@@ -104,35 +59,38 @@ class MockLocationService : Service() {
 
   internal val state: StateFlow<ServiceState> = _state.asStateFlow()
 
-  private val json = Json {
-    ignoreUnknownKeys = true
-    encodeDefaults = false
-  }
   private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-
-  private fun errorResponse(id: String?, message: String, e: Throwable): String {
-    Log.w(TAG, message, e)
-    return json.encodeToString(
-      AgentResponse(id = id, success = false, error = "$message: ${e.message}")
-    )
-  }
-
-  @Volatile private var serverSocket: ServerSocket? = null
-
-  @Volatile private var clientSocket: Socket? = null
-  private var locationEmitJob: Job? = null
+  private lateinit var socketServer: AgentSocketServer
   private lateinit var locationManager: LocationManager
   private lateinit var notificationManager: NotificationManager
 
-  override fun onCreate() {
-    super.onCreate()
+  private var locationEmitJob: Job? = null
 
+  override fun onCreate() {
     locationManager = getSystemService(LocationManager::class.java)
     notificationManager = getSystemService(NotificationManager::class.java)
 
     createNotificationChannel()
     setupMockLocationProvider()
-    startSocketServer()
+
+    socketServer = AgentSocketServer(
+      port = PORT,
+      scope = serviceScope,
+      commandHandler = ::processCommand
+    )
+    socketServer.start()
+
+    socketServer.connected.onEach { connected ->
+      updateNotification(
+        when {
+          connected -> "Client connected"
+          _state.value.isMocking ->
+            "Location: %.6f, %.6f".format(_state.value.lat, _state.value.lng)
+
+          else -> "Waiting for connection"
+        }
+      )
+    }.launchIn(serviceScope)
 
     _state.update { it.copy(isRunning = true) }
   }
@@ -156,14 +114,9 @@ class MockLocationService : Service() {
   override fun onBind(intent: Intent?): IBinder = binder
 
   override fun onDestroy() {
-    super.onDestroy()
-
     _state.update { ServiceState() }
-
-    // Cancel coroutines first to avoid exception noise from closed sockets
+    socketServer.stop()
     serviceScope.cancel()
-    clientSocket?.close()
-    serverSocket?.close()
     removeMockLocationProvider()
   }
 
@@ -222,16 +175,15 @@ class MockLocationService : Service() {
         )
       }
     } catch (e: IllegalArgumentException) {
-      // Provider already exists, that's fine
-      Log.w(TAG, "Mock location provider already exists", e)
+      Logger.w("Mock location provider already exists", e)
     }
 
     try {
       locationManager.setTestProviderEnabled(PROVIDER_NAME, true)
     } catch (e: SecurityException) {
-      Log.w(TAG, "Failed to enable test provider", e)
+      Logger.w("Failed to enable test provider", e)
     } catch (e: IllegalArgumentException) {
-      Log.w(TAG, "Failed to enable test provider", e)
+      Logger.w("Failed to enable test provider", e)
     }
   }
 
@@ -239,102 +191,38 @@ class MockLocationService : Service() {
     try {
       locationManager.removeTestProvider(PROVIDER_NAME)
     } catch (e: SecurityException) {
-      Log.w(TAG, "Failed to remove test provider", e)
+      Logger.w("Failed to remove test provider", e)
     } catch (e: IllegalArgumentException) {
-      // Provider might not exist, that's fine
-      Log.w(TAG, "Failed to remove test provider", e)
+      Logger.w("Failed to remove test provider", e)
     }
   }
 
-  private fun startSocketServer() {
-    serviceScope.launch {
-      try {
-        serverSocket = ServerSocket(PORT, 1, InetAddress.getByName("127.0.0.1"))
-
-        while (true) {
-          val socket = serverSocket?.accept() ?: break
-          handleClient(socket)
-        }
-      } catch (e: IOException) {
-        // Server socket closed or error, service is likely stopping
-        Log.w(TAG, "Socket server error", e)
-      }
-    }
+  private fun processCommand(request: AgentRequest): AgentResponse = when (request.type) {
+    "set_location" -> handleSetLocation(request)
+    "stop" -> handleStop(request)
+    "status" -> handleStatus(request)
+    else -> AgentResponse(
+      id = request.id,
+      success = false,
+      error = "unknown command type: ${request.type}"
+    )
   }
 
-  private fun handleClient(socket: Socket) {
-    try {
-      clientSocket = socket
-      socket.soTimeout = 0 // No timeout — MCP server may be idle between commands
-
-      socket.use { client ->
-        val reader = BufferedReader(InputStreamReader(client.getInputStream()))
-        val writer = BufferedWriter(OutputStreamWriter(client.getOutputStream()))
-
-        while (true) {
-          val line = reader.readLine() ?: break
-
-          val response = processCommand(line)
-          writer.write(response)
-          writer.newLine()
-          writer.flush()
-        }
-      }
-    } catch (e: IOException) {
-      // Client disconnected or error
-      Log.w(TAG, "Client handler error", e)
-    } finally {
-      // Client disconnected — mock location remains active in LocationManager
-      updateNotification(
-        if (_state.value.isMocking) {
-          "Location: %.6f, %.6f".format(_state.value.lat, _state.value.lng)
-        } else {
-          "Waiting for connection"
-        }
-      )
-      clientSocket = null
-    }
-  }
-
-  private fun processCommand(jsonLine: String): String = try {
-    val request = json.decodeFromString<AgentRequest>(jsonLine)
-
-    when (request.type) {
-      "set_location" -> handleSetLocation(request)
-      "stop" -> handleStop(request)
-      "status" -> handleStatus(request)
-      else -> json.encodeToString(
-        AgentResponse(
+  private fun handleSetLocation(request: AgentRequest): AgentResponse {
+    return try {
+      if (request.lat !in MIN_LATITUDE..MAX_LATITUDE) {
+        return AgentResponse(
           id = request.id,
           success = false,
-          error = "unknown command type: ${request.type}"
-        )
-      )
-    }
-  } catch (e: SerializationException) {
-    errorResponse(null, "Failed to parse request", e)
-  }
-
-  private fun handleSetLocation(request: AgentRequest): String {
-    return try {
-      // Validate coordinates
-      if (request.lat < MIN_LATITUDE || request.lat > MAX_LATITUDE) {
-        return json.encodeToString(
-          AgentResponse(
-            id = request.id,
-            success = false,
-            error = "Invalid latitude: ${request.lat}. Must be between $MIN_LATITUDE and $MAX_LATITUDE."
-          )
+          error = "Invalid latitude: ${request.lat}. Must be between $MIN_LATITUDE and $MAX_LATITUDE."
         )
       }
 
-      if (request.lng < MIN_LONGITUDE || request.lng > MAX_LONGITUDE) {
-        return json.encodeToString(
-          AgentResponse(
-            id = request.id,
-            success = false,
-            error = "Invalid longitude: ${request.lng}. Must be between $MIN_LONGITUDE and $MAX_LONGITUDE."
-          )
+      if (request.lng !in MIN_LONGITUDE..MAX_LONGITUDE) {
+        return AgentResponse(
+          id = request.id,
+          success = false,
+          error = "Invalid longitude: ${request.lng}. Must be between $MIN_LONGITUDE and $MAX_LONGITUDE."
         )
       }
 
@@ -347,27 +235,25 @@ class MockLocationService : Service() {
         bearing = request.bearing
       )
 
-      // Set location once immediately
       emitMockLocation(mockLocation)
 
       _state.update { it.copy(isMocking = true, lat = request.lat, lng = request.lng) }
       updateNotification("Location: %.6f, %.6f".format(request.lat, request.lng))
 
-      // Start continuous emission so Fused Location Provider picks it up
       startLocationEmitLoop(mockLocation)
 
-      json.encodeToString(
-        AgentResponse(
-          id = request.id,
-          success = true,
-          lat = request.lat,
-          lng = request.lng
-        )
+      AgentResponse(
+        id = request.id,
+        success = true,
+        lat = request.lat,
+        lng = request.lng
       )
     } catch (e: SecurityException) {
-      errorResponse(request.id, "Failed to set location", e)
+      Logger.w("Failed to set location", e)
+      AgentResponse(id = request.id, success = false, error = "Failed to set location: ${e.message}")
     } catch (e: IllegalArgumentException) {
-      errorResponse(request.id, "Failed to set location", e)
+      Logger.w("Failed to set location", e)
+      AgentResponse(id = request.id, success = false, error = "Failed to set location: ${e.message}")
     }
   }
 
@@ -396,49 +282,41 @@ class MockLocationService : Service() {
       } catch (e: CancellationException) {
         throw e
       } catch (e: SecurityException) {
-        Log.e(TAG, "Location emit loop failed", e)
+        Logger.e("Location emit loop failed", e)
         _state.update { it.copy(isMocking = false, lat = 0.0, lng = 0.0) }
         updateNotification("Mock location error")
       }
     }
   }
 
-  private fun handleStop(request: AgentRequest): String {
-    try {
-      locationEmitJob?.cancel()
-      locationEmitJob = null
+  private fun handleStop(request: AgentRequest): AgentResponse = try {
+    locationEmitJob?.cancel()
+    locationEmitJob = null
 
-      _state.update { it.copy(isMocking = false, lat = 0.0, lng = 0.0) }
+    _state.update { it.copy(isMocking = false, lat = 0.0, lng = 0.0) }
 
-      // Remove and re-setup provider to stop emitting mock locations
-      removeMockLocationProvider()
-      setupMockLocationProvider()
+    removeMockLocationProvider()
+    setupMockLocationProvider()
 
-      updateNotification("Waiting for connection")
+    updateNotification("Waiting for connection")
 
-      return json.encodeToString(
-        AgentResponse(
-          id = request.id,
-          success = true
-        )
-      )
-    } catch (e: SecurityException) {
-      return errorResponse(request.id, "Failed to stop", e)
-    } catch (e: IllegalArgumentException) {
-      return errorResponse(request.id, "Failed to stop", e)
-    }
+    AgentResponse(id = request.id, success = true)
+  } catch (e: SecurityException) {
+    Logger.w("Failed to stop", e)
+    AgentResponse(id = request.id, success = false, error = "Failed to stop: ${e.message}")
+  } catch (e: IllegalArgumentException) {
+    Logger.w("Failed to stop", e)
+    AgentResponse(id = request.id, success = false, error = "Failed to stop: ${e.message}")
   }
 
-  private fun handleStatus(request: AgentRequest): String {
+  private fun handleStatus(request: AgentRequest): AgentResponse {
     val current = _state.value
-    return json.encodeToString(
-      AgentResponse(
-        id = request.id,
-        success = true,
-        active = current.isMocking,
-        lat = if (current.isMocking) current.lat else null,
-        lng = if (current.isMocking) current.lng else null
-      )
+    return AgentResponse(
+      id = request.id,
+      success = true,
+      active = current.isMocking,
+      lat = if (current.isMocking) current.lat else null,
+      lng = if (current.isMocking) current.lng else null
     )
   }
 }
