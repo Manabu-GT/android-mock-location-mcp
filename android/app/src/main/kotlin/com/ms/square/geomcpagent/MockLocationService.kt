@@ -201,6 +201,7 @@ class MockLocationService : Service() {
     "set_location" -> handleSetLocation(request)
     "stop" -> handleStop(request)
     "status" -> handleStatus(request)
+    "get_location" -> handleGetLocation(request)
     else -> AgentResponse(
       id = request.id,
       success = false,
@@ -322,5 +323,37 @@ class MockLocationService : Service() {
       lat = if (current.isMocking) current.lat else null,
       lng = if (current.isMocking) current.lng else null
     )
+  }
+
+  @SuppressLint("MissingPermission")
+  private fun handleGetLocation(request: AgentRequest): AgentResponse {
+    return try {
+      // Try GPS provider first, then network provider as fallback
+      val location = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+        ?: locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+
+      if (location != null) {
+        AgentResponse(
+          id = request.id,
+          success = true,
+          lat = location.latitude,
+          lng = location.longitude
+        )
+      } else {
+        AgentResponse(
+          id = request.id,
+          success = false,
+          error = "No location available. The device may not have a recent GPS fix. " +
+            "Open Google Maps or another location app to establish a fix, then retry."
+        )
+      }
+    } catch (e: SecurityException) {
+      Logger.w("Failed to get location", e)
+      AgentResponse(
+        id = request.id,
+        success = false,
+        error = "Location permission not granted: ${e.message}"
+      )
+    }
   }
 }

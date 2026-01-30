@@ -486,6 +486,47 @@ server.registerTool("geo_get_status", { description: "Get current connection and
   return text(lines.join("\n"));
 });
 
+// 9. geo_get_location
+server.registerTool(
+  "geo_get_location",
+  {
+    description:
+      "Get the device's current real GPS location (last known position from the device's location sensors). " +
+      "Use this to determine where the device physically is before simulating a route. " +
+      "If the device has no recent GPS fix, the tool will fail — in that case, ask the user for their current location.",
+  },
+  async () => {
+    if (!isConnected()) {
+      return text(
+        "Device not connected. Call geo_connect_device first.\n" +
+          "If you need the starting location for a route, ask the user where they are.",
+      );
+    }
+    try {
+      const res = (await sendCommand({ type: "get_location" })) as {
+        success?: boolean;
+        lat?: number;
+        lng?: number;
+        error?: string;
+      };
+      if (res.success && res.lat !== undefined && res.lng !== undefined) {
+        lastLat = res.lat;
+        lastLng = res.lng;
+        return text(`Device location: ${res.lat.toFixed(6)}, ${res.lng.toFixed(6)}`);
+      }
+      return text(
+        `Could not get device location: ${res.error ?? "unknown error"}\n` +
+          "Ask the user for their current location or provide coordinates directly.",
+      );
+    } catch (err) {
+      return text(
+        `Failed to get device location: ${(err as Error).message}\n` +
+          "Ask the user for their current location or provide coordinates directly.",
+      );
+    }
+  },
+);
+
 // ── Start ───────────────────────────────────────────────────────────────────
 
 function gracefulShutdown(): void {

@@ -138,6 +138,55 @@ Query the current state of the agent.
 
 ---
 
+### 4. `get_location`
+
+Get the device's real GPS location (last known position from Android's location providers). Tries GPS first, then falls back to the network provider.
+
+**Request**
+
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "type": "get_location"
+}
+```
+
+| Field  | Type   | Required | Description                        |
+|--------|--------|----------|------------------------------------|
+| `id`   | string | yes      | UUID v4 for request/response match |
+| `type` | string | yes      | Must be `"get_location"`           |
+
+**Response (success)**
+
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "success": true,
+  "lat": 40.0005,
+  "lng": -105.235
+}
+```
+
+**Response (no location available)**
+
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "success": false,
+  "error": "No location available. The device may not have a recent GPS fix. Open Google Maps or another location app to establish a fix, then retry."
+}
+```
+
+| Field     | Type    | Present            | Description                                  |
+|-----------|---------|--------------------|----------------------------------------------|
+| `id`      | string  | always             | Echoed request ID                            |
+| `success` | boolean | always             | `true` if a location was found               |
+| `lat`     | number  | when `success=true` | Device latitude from last known GPS fix      |
+| `lng`     | number  | when `success=true` | Device longitude from last known GPS fix     |
+| `error`   | string  | when `success=false`| Human-readable reason location is unavailable |
+
+---
+
 ## Error Response
 
 Any command may return an error instead of its normal response.
