@@ -46,4 +46,6 @@ jobs:
         run: npm run build
 
       - name: Verify dist output
-        run: node dist/index.js --help || true
+        run: |
+          test -f dist/index.js
+          node --check dist/index.js

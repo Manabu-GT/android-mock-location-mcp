@@ -14,6 +14,8 @@ import {
   getConnectedDeviceId,
   isConnected,
   onDisconnect,
+  initDevice,
+  shutdownDevice,
 } from "./device.js";
 
 const require = createRequire(import.meta.url);
@@ -54,7 +56,7 @@ const server = new McpServer({
 // 1. geo_list_devices
 server.registerTool("geo_list_devices", { description: "List connected Android devices via ADB" }, async () => {
   try {
-    const raw = listDevices();
+    const raw = await listDevices();
     const lines = raw.split("\n").slice(1).filter((l) => l.trim());
     if (lines.length === 0) return text("No devices found. Ensure USB debugging is enabled.");
     const devices = lines.map((l) => {
@@ -76,7 +78,7 @@ server.registerTool(
   },
   async ({ deviceId }) => {
     try {
-      connectToDevice(deviceId);
+      await connectToDevice(deviceId);
       // Verify with status ping
       const res = (await sendCommand({ type: "status" })) as { success?: boolean };
       if (res.success) return text(`Connected to ${deviceId}. Agent is running.`);
@@ -485,6 +487,16 @@ server.registerTool("geo_get_status", { description: "Get current connection and
 });
 
 // ── Start ───────────────────────────────────────────────────────────────────
+
+function gracefulShutdown(): void {
+  stopSimulation();
+  shutdownDevice();
+  process.exit(0);
+}
+process.on("SIGTERM", gracefulShutdown);
+process.on("SIGINT", gracefulShutdown);
+
+initDevice();
 
 const transport = new StdioServerTransport();
 await server.connect(transport);
