@@ -85,11 +85,16 @@ jobs:
         env:
           SIGNING_KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
         run: |
+          set -euo pipefail
           if [[ -z "$SIGNING_KEYSTORE_BASE64" ]]; then
             echo "::error::SIGNING_KEYSTORE_BASE64 secret is not set. See PUBLISHING.md for setup instructions."
             exit 1
           fi
-          echo "$SIGNING_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+          printf '%s' "$SIGNING_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+          if [[ ! -s "$RUNNER_TEMP/release.keystore" ]]; then
+            echo "::error::Failed to decode keystore — output file is empty."
+            exit 1
+          fi
           echo "SIGNING_KEYSTORE_PATH=$RUNNER_TEMP/release.keystore" >> $GITHUB_ENV
 
       - name: Build release APK
