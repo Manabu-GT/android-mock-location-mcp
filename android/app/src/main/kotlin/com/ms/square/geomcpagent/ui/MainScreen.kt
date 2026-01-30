@@ -254,13 +254,20 @@ private fun SetupInstructionsCard() {
         fontWeight = FontWeight.Bold
       )
       Spacer(modifier = Modifier.height(12.dp))
-      Text(text = "1. Enable Developer Options on your device", fontSize = 14.sp)
-      Text(text = "2. Select this app as mock location app", fontSize = 14.sp)
-      Text(text = "3. Start the service using the button above", fontSize = 14.sp)
+      Text(text = "1. Enable Developer Options and USB Debugging", fontSize = 14.sp)
+      Text(text = "2. Connect device via USB (or wireless ADB)", fontSize = 14.sp)
+      Text(text = "3. Use any location tool from your MCP client", fontSize = 14.sp)
+      Spacer(modifier = Modifier.height(8.dp))
       Text(
-        text = "4. Run: adb forward tcp:5005 tcp:5005",
-        fontSize = 14.sp,
-        fontFamily = FontFamily.Monospace
+        text = "The server automatically configures mock location permissions, starts this service, and sets up port forwarding.",
+        fontSize = 13.sp,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+      )
+      Spacer(modifier = Modifier.height(8.dp))
+      Text(
+        text = "You can also start/stop the service manually using the button above.",
+        fontSize = 13.sp,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
       )
     }
   }

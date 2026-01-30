@@ -10,15 +10,18 @@ import { createRequire } from "node:module";
 import {
   sendCommand,
   connectToDevice,
-  listDevices,
   getConnectedDeviceId,
   isConnected,
   onDisconnect,
   initDevice,
   shutdownDevice,
-  startAgentService,
-  ensureDeviceSetup,
 } from "./device.js";
+import {
+  listDevices,
+  isAgentInstalled,
+  ensureDeviceSetup,
+  startAgentService,
+} from "./adb.js";
 
 const require = createRequire(import.meta.url);
 const { version } = require("../package.json") as { version: string };
@@ -67,7 +70,7 @@ function text(msg: string) {
 
 const isOsmProvider = !process.env.PROVIDER || ["osm", "osrm"].includes(process.env.PROVIDER.toLowerCase());
 const geocodeHint = isOsmProvider
-  ? " Prefer resolving place names to lat/lng coordinates yourself and passing them directly, as the default geocoder (Nominatim) is rate-limited."
+  ? " Prefer resolving place names to lat/lng coordinates yourself and passing them directly, as the default geocoder (Nominatim) is rate-limited. To resolve a place name: use WebSearch with `site:google.com/maps/place <place name>` to find an indexed Google Maps listing, then extract coordinates from the result URL — look for the `!3d<lat>!4d<lng>` parameters (e.g. `!3d40.0080766!4d-105.2342995`), or the `@lat,lng` segment (e.g. `@40.008,-105.234`). If no Maps result is found, pass the place name or address directly to the tool and let the server geocode it."
   : "";
 
 // ── MCP Server ──────────────────────────────────────────────────────────────
@@ -111,7 +114,25 @@ server.registerTool(
       // Connection failed — fall through to auto-start
     }
 
-    // Auto-start: set up permissions/mock location app, then launch agent
+    // Verify the agent app is installed before attempting auto-start
+    try {
+      if (!isAgentInstalled(deviceId)) {
+        return text(
+          `GeoMCP Agent app is not installed on ${deviceId}.\n` +
+            "Install it with:\n" +
+            "  adb install -r android-mock-location-mcp-agent.apk\n" +
+            "Download the APK from https://github.com/Manabu-GT/android-mock-location-mcp/releases\n" +
+            "Or build from source in the repository root:\n" +
+            "  cd android && ./gradlew installDebug",
+        );
+      }
+    } catch (checkErr) {
+      return text(
+        `Failed to check if agent is installed on ${deviceId}: ${checkErr instanceof Error ? checkErr.message : String(checkErr)}`,
+      );
+    }
+
+    // Auto-start: set up permissions/mock location app, then launch agent service
     try {
       ensureDeviceSetup(deviceId);
     } catch {
@@ -121,8 +142,7 @@ server.registerTool(
       startAgentService(deviceId);
     } catch (startErr) {
       return text(
-        `Failed to connect to ${deviceId} and could not auto-start the agent service: ${startErr instanceof Error ? startErr.message : String(startErr)}\n` +
-          "Ensure the GeoMCP Agent app is installed on the device.",
+        `Failed to auto-start agent service on ${deviceId}: ${startErr instanceof Error ? startErr.message : String(startErr)}`,
       );
     }
 

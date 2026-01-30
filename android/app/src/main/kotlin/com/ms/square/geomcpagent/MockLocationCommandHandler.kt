@@ -27,6 +27,7 @@ private const val MAX_LATITUDE = 90.0
 private const val MIN_LONGITUDE = -180.0
 private const val MAX_LONGITUDE = 180.0
 private const val LOCATION_UPDATE_INTERVAL_MS = 1_000L
+private const val IDLE_TIMEOUT_MS = 10 * 60 * 1_000L // 10 minutes
 
 internal class MockLocationCommandHandler(
   private val context: Context,
@@ -38,8 +39,14 @@ internal class MockLocationCommandHandler(
 ) {
 
   private var locationEmitJob: Job? = null
+  @Volatile private var lastCommandReceivedAt: Long = SystemClock.elapsedRealtime()
 
-  fun processCommand(request: AgentRequest): AgentResponse = when (request.type) {
+  fun processCommand(request: AgentRequest): AgentResponse {
+    lastCommandReceivedAt = SystemClock.elapsedRealtime()
+    return dispatchCommand(request)
+  }
+
+  private fun dispatchCommand(request: AgentRequest): AgentResponse = when (request.type) {
     "set_location" -> handleSetLocation(request)
     "stop" -> handleStop(request)
     "status" -> handleStatus(request)
@@ -54,6 +61,18 @@ internal class MockLocationCommandHandler(
   fun cancelEmitLoop() {
     locationEmitJob?.cancel()
     locationEmitJob = null
+  }
+
+  /** Stop mocking (called from notification action or idle timeout). */
+  fun stopMocking() {
+    try {
+      cancelEmitLoop()
+      state.update { it.copy(isMocking = false, lat = 0.0, lng = 0.0) }
+      onResetMockProvider()
+      onNotificationUpdate("Waiting for connection")
+    } catch (e: Exception) {
+      Logger.w("Failed to stop mocking", e)
+    }
   }
 
   private fun handleSetLocation(request: AgentRequest): AgentResponse {
@@ -120,11 +139,17 @@ internal class MockLocationCommandHandler(
   }
 
   private fun startLocationEmitLoop(mock: MockLocation) {
-    locationEmitJob?.cancel()
+    cancelEmitLoop()
     locationEmitJob = scope.launch {
       try {
         while (true) {
           delay(LOCATION_UPDATE_INTERVAL_MS)
+          // Auto-stop if no command received within idle timeout
+          if (SystemClock.elapsedRealtime() - lastCommandReceivedAt > IDLE_TIMEOUT_MS) {
+            Logger.i("Idle timeout reached (${IDLE_TIMEOUT_MS / 1000}s), auto-stopping mock location")
+            stopMocking()
+            return@launch
+          }
           emitMockLocation(mock)
         }
       } catch (e: CancellationException) {
@@ -142,8 +167,7 @@ internal class MockLocationCommandHandler(
   }
 
   private fun handleStop(request: AgentRequest): AgentResponse = try {
-    locationEmitJob?.cancel()
-    locationEmitJob = null
+    cancelEmitLoop()
 
     state.update { it.copy(isMocking = false, lat = 0.0, lng = 0.0) }
 

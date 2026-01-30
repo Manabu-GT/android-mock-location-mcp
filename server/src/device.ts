@@ -1,19 +1,14 @@
-// ── ADB + socket communication with Android agent ───────────────────────────
+// ── Socket communication with Android agent ─────────────────────────────────
 
 import * as net from "node:net";
-import { execFileSync, execFile } from "node:child_process";
-import { promisify } from "node:util";
 import { randomUUID } from "node:crypto";
 import { startTracking, stopTracking, getKnownDeviceState } from "./adb-tracker.js";
 import type { DeviceEvent } from "./adb-tracker.js";
-
-const execFileAsync = promisify(execFile);
+import { adbForward, AGENT_PORT } from "./adb.js";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-const AGENT_PORT = 5005;
 const CONNECT_TIMEOUT_MS = 10_000;
-const ADB_FORWARD_TIMEOUT_MS = 10_000;
 const COMMAND_TIMEOUT_MS = 5_000;
 
 // ── State ────────────────────────────────────────────────────────────────────
@@ -47,15 +42,6 @@ export function getConnectedDeviceId(): string | null {
 
 export function isConnected(): boolean {
   return state === "connected" && socket !== null && !socket.destroyed;
-}
-
-/** List connected ADB devices. Returns raw `adb devices -l` output. */
-export async function listDevices(): Promise<string> {
-  const { stdout } = await execFileAsync("adb", ["devices", "-l"], {
-    encoding: "utf-8",
-    timeout: ADB_FORWARD_TIMEOUT_MS,
-  });
-  return stdout;
 }
 
 /** Send a JSON command to the agent and await the response. */
@@ -94,55 +80,6 @@ export function sendCommand(command: Record<string, unknown>): Promise<unknown> 
       reject(err instanceof Error ? err : new Error(String(err)));
     }
   });
-}
-
-const AGENT_PACKAGE = "com.ms.square.geomcpagent";
-
-/**
- * Ensure the device is set up for mock location: grant location permissions
- * and set this app as the mock location provider via AppOps.
- * All commands are idempotent — safe to call on every connection attempt.
- */
-export function ensureDeviceSetup(deviceId: string): void {
-  if (!/^[a-zA-Z0-9._:\-]+$/.test(deviceId)) {
-    throw new Error(`Invalid device ID: ${deviceId}`);
-  }
-  const adb = (args: string[]) =>
-    execFileSync("adb", ["-s", deviceId, ...args], { encoding: "utf-8" });
-
-  // Grant location permissions (required for mock location provider)
-  adb(["shell", "pm", "grant", AGENT_PACKAGE, "android.permission.ACCESS_FINE_LOCATION"]);
-  adb(["shell", "pm", "grant", AGENT_PACKAGE, "android.permission.ACCESS_COARSE_LOCATION"]);
-
-  // Set this app as the mock location provider (equivalent to Developer Options selection)
-  adb(["shell", "appops", "set", AGENT_PACKAGE, "android:mock_location", "allow"]);
-}
-
-/**
- * Launch the Android agent activity with auto-start flag via ADB.
- * The activity starts the MockLocationService automatically when this flag is set,
- * eliminating the need for the user to manually tap "Start Service".
- */
-export function startAgentService(deviceId: string): void {
-  if (!/^[a-zA-Z0-9._:\-]+$/.test(deviceId)) {
-    throw new Error(`Invalid device ID: ${deviceId}`);
-  }
-  execFileSync(
-    "adb",
-    [
-      "-s",
-      deviceId,
-      "shell",
-      "am",
-      "start",
-      "-n",
-      `${AGENT_PACKAGE}/.MainActivity`,
-      "--ez",
-      "auto_start_service",
-      "true",
-    ],
-    { encoding: "utf-8" },
-  );
 }
 
 /**
@@ -259,28 +196,13 @@ function notifyDisconnect(): void {
  * Throws on failure — callers decide the failure state.
  */
 function transitionToConnecting(deviceId: string): void {
-  if (!/^[a-zA-Z0-9._:\-]+$/.test(deviceId)) {
-    throw new Error(`Invalid device ID: ${deviceId}`);
-  }
-
   // Cancel both timers so a concurrent timer can't fire while we're connecting.
   clearAllTimers();
 
   destroyExistingSocket();
 
   // Set up ADB port forwarding (sync with timeout to prevent indefinite hang).
-  try {
-    execFileSync("adb", ["-s", deviceId, "forward", `tcp:${AGENT_PORT}`, `tcp:${AGENT_PORT}`], {
-      encoding: "utf-8",
-      timeout: ADB_FORWARD_TIMEOUT_MS,
-    });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    const stderr = (err as { stderr?: string }).stderr;
-    throw new Error(
-      `Failed to set up adb port forwarding for ${deviceId}: ${msg}${stderr ? ` (${stderr.trim()})` : ""}`,
-    );
-  }
+  adbForward(deviceId);
 
   // Success path: create socket first, then set state — ensures the
   // invariant that "connecting" always has a live socket reference.

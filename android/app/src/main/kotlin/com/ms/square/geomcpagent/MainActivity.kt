@@ -71,8 +71,6 @@ class MainActivity : ComponentActivity() {
       requestPermissions()
     }
 
-    handleAutoStartIntent(intent)
-
     setContent {
       val serviceState by service?.state?.collectAsStateWithLifecycle()
         ?: remember { mutableStateOf(ServiceState()) }
@@ -96,17 +94,14 @@ class MainActivity : ComponentActivity() {
     }
   }
 
-  override fun onNewIntent(intent: Intent) {
-    super.onNewIntent(intent)
-    handleAutoStartIntent(intent)
-  }
-
   override fun onStart() {
     super.onStart()
     // Re-check in case user granted via Settings or selected mock location app
     checkPermissions()
     checkMockLocationAppSelected()
     // Try to bind — succeeds only if service is already running (flag 0 = don't auto-create)
+    // It's for the case where the service was started externally (via ADB am start-foreground-service) without the Activity.
+    // When the user later opens the app, onStart tries to bind to the already-running service so the UI can display its current state (mocking active, coordinates, etc.).
     if (!bound) {
       bindService(Intent(this, MockLocationService::class.java), connection, 0)
     }
@@ -148,30 +143,11 @@ class MainActivity : ComponentActivity() {
     permissionLauncher.launch(permissions.toTypedArray())
   }
 
-  /**
-   * Handle an intent with "auto_start_service" boolean extra.
-   * Sent via ADB: adb shell am start -n .../.MainActivity --ez auto_start_service true
-   */
-  private fun handleAutoStartIntent(intent: Intent?) {
-    if (intent?.getBooleanExtra("auto_start_service", false) == true) {
-      if (permissionsGranted) {
-        Logger.i("Auto-starting mock location service via intent")
-        startMockService()
-      } else {
-        Logger.w("Cannot auto-start service: location permissions not granted")
-      }
-    }
-  }
-
   private fun startMockService() {
     if (!permissionsGranted) return
 
     val intent = Intent(this, MockLocationService::class.java)
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-      startForegroundService(intent)
-    } else {
-      startService(intent)
-    }
+    startForegroundService(intent)
     // Bind to get the service reference
     if (!bound) {
       bindService(intent, connection, Context.BIND_AUTO_CREATE)

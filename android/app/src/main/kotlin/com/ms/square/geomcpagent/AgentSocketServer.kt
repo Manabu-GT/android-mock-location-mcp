@@ -56,6 +56,15 @@ internal class AgentSocketServer(
     }
   }
 
+  /** Close the current client connection (server keeps listening for new connections). */
+  fun disconnectClient() {
+    try {
+      clientSocket?.close()
+    } catch (e: IOException) {
+      Logger.w("Failed to close client socket", e)
+    }
+  }
+
   fun stop() {
     try {
       clientSocket?.close()
