@@ -140,7 +140,7 @@ Query the current state of the agent.
 
 ### 4. `get_location`
 
-Get the device's real GPS location (last known position from Android's location providers). Tries GPS first, then falls back to the network provider.
+Get the device's real GPS location (last known position from Android's location providers). Tries GPS first, then falls back to the network provider. Returns an error if mock location is currently active, since `getLastKnownLocation()` would return the injected mock fix rather than the real position.
 
 **Request**
 

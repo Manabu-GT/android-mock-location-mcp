@@ -327,24 +327,36 @@ class MockLocationService : Service() {
 
   @SuppressLint("MissingPermission")
   private fun handleGetLocation(request: AgentRequest): AgentResponse {
+    // When mocking is active, getLastKnownLocation returns the injected mock fix,
+    // not the device's real position. Refuse the request so callers don't mistake
+    // mocked coordinates for the real GPS location.
+    if (_state.value.isMocking) {
+      return AgentResponse(
+        id = request.id,
+        success = false,
+        error = "Cannot get real location while mock location is active. " +
+          "Call stop first, or use the current mock position from the status command.",
+      )
+    }
     return try {
       // Try GPS provider first, then network provider as fallback
-      val location = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
-        ?: locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+      val location =
+        locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+          ?: locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
 
       if (location != null) {
         AgentResponse(
           id = request.id,
           success = true,
           lat = location.latitude,
-          lng = location.longitude
+          lng = location.longitude,
         )
       } else {
         AgentResponse(
           id = request.id,
           success = false,
           error = "No location available. The device may not have a recent GPS fix. " +
-            "Open Google Maps or another location app to establish a fix, then retry."
+            "Open Google Maps or another location app to establish a fix, then retry.",
         )
       }
     } catch (e: SecurityException) {
@@ -352,7 +364,7 @@ class MockLocationService : Service() {
       AgentResponse(
         id = request.id,
         success = false,
-        error = "Location permission not granted: ${e.message}"
+        error = "Location permission not granted: ${e.message}",
       )
     }
   }
