@@ -69,7 +69,29 @@ Before triggering a release workflow, update the relevant version file for that 
 
 The release workflow signs the APK using a keystore stored as GitHub secrets. This is a **one-time setup**.
 
-### 1. Generate a keystore
+You can use an existing keystore or [generate a new one](#generating-a-new-keystore).
+
+### Add GitHub secrets
+
+Base64-encode your keystore:
+
+```bash
+base64 -i /path/to/your.keystore | pbcopy   # macOS (copies to clipboard)
+base64 -w 0 /path/to/your.keystore          # Linux (prints to stdout)
+```
+
+Go to **Settings → Secrets and variables → Actions** and add:
+
+| Secret                       | Value                                        |
+|------------------------------|----------------------------------------------|
+| `SIGNING_KEYSTORE_BASE64`    | Base64-encoded keystore from above            |
+| `SIGNING_KEYSTORE_PASSWORD`  | Your keystore password                        |
+| `SIGNING_KEY_ALIAS`          | Your key alias                                |
+| `SIGNING_KEY_PASSWORD`       | Your key password                             |
+
+### Generating a new keystore
+
+If you don't have an existing keystore:
 
 ```bash
 keytool -genkeypair \
@@ -82,24 +104,7 @@ keytool -genkeypair \
   -dname "CN=Android Mock Location MCP"
 ```
 
-### 2. Add GitHub secrets
-
-Go to **Settings → Secrets and variables → Actions** and add:
-
-| Secret                       | Value                                                  |
-|------------------------------|--------------------------------------------------------|
-| `SIGNING_KEYSTORE_BASE64`    | Base64-encoded keystore: `base64 -i release.keystore`  |
-| `SIGNING_KEYSTORE_PASSWORD`  | The `-storepass` value from step 1                     |
-| `SIGNING_KEY_ALIAS`          | The `-alias` value from step 1 (e.g., `release`)      |
-| `SIGNING_KEY_PASSWORD`       | The `-keypass` value from step 1                       |
-
-### 3. Delete the local keystore
-
-```bash
-rm release.keystore
-```
-
-The keystore only needs to exist as a GitHub secret. Keep a secure backup outside the repository.
+After adding the secrets, delete the local copy (`rm release.keystore`) and keep a secure backup outside the repository.
 
 ## CI Workflows
 
