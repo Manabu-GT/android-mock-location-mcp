@@ -111,11 +111,7 @@ export function connectToDevice(deviceId: string): Promise<void> {
   // Notify disconnect callback when switching away from a live connection
   // (the stale-socket guard in the close handler will suppress its callback).
   if (state === "connected") {
-    try {
-      disconnectCallback?.();
-    } catch (err) {
-      console.error("Disconnect callback error:", err instanceof Error ? err.message : err);
-    }
+    notifyDisconnect();
   }
 
   // Ensure the ADB tracker is running (safe to call repeatedly).
@@ -155,22 +151,10 @@ export function initDevice(): void {
 /** Shut down device module — clean up all resources. */
 export function shutdownDevice(): void {
   clearAllTimers();
-
-  // Null the reference before destroying to prevent the close handler from
-  // running cleanup (it will see socket !== sock via the stale-socket guard).
-  const oldSocket = socket;
-  socket = null;
-  if (oldSocket && !oldSocket.destroyed) oldSocket.destroy();
-
-  // Reject pending requests
-  for (const [id, entry] of pendingRequests) {
-    clearTimeout(entry.timer);
-    entry.reject(new Error("Device module shutting down."));
-    pendingRequests.delete(id);
-  }
+  destroyExistingSocket();
+  rejectAllPending("Device module shutting down.");
 
   // Reset state
-  connectedDeviceId = null;
   targetDeviceId = null;
   state = "disconnected";
 
@@ -191,6 +175,33 @@ function clearAllTimers(): void {
   }
 }
 
+/** Null the socket reference before destroying — prevents the close handler from
+ *  running cleanup via the stale-socket guard (`socket !== sock`). */
+function destroyExistingSocket(): void {
+  const old = socket;
+  socket = null;
+  connectedDeviceId = null;
+  if (old && !old.destroyed) old.destroy();
+}
+
+/** Reject all in-flight commands with the given reason. */
+function rejectAllPending(reason: string): void {
+  for (const [id, entry] of pendingRequests) {
+    clearTimeout(entry.timer);
+    entry.reject(new Error(reason));
+    pendingRequests.delete(id);
+  }
+}
+
+/** Safely invoke the disconnect callback (exceptions are caught). */
+function notifyDisconnect(): void {
+  try {
+    disconnectCallback?.();
+  } catch (err) {
+    console.error("Disconnect callback error:", err instanceof Error ? err.message : err);
+  }
+}
+
 // ── Internal: State Machine ──────────────────────────────────────────────────
 
 /**
@@ -206,14 +217,7 @@ function transitionToConnecting(deviceId: string): void {
   // Cancel both timers so a concurrent timer can't fire while we're connecting.
   clearAllTimers();
 
-  // Null the reference before destroying to prevent the close handler from
-  // running cleanup on the old socket (stale-socket guard: socket !== sock).
-  const oldSocket = socket;
-  socket = null;
-  connectedDeviceId = null;
-  if (oldSocket && !oldSocket.destroyed) {
-    oldSocket.destroy();
-  }
+  destroyExistingSocket();
 
   // Set up ADB port forwarding (sync with timeout to prevent indefinite hang).
   try {
@@ -293,29 +297,17 @@ function setupSocketHandlers(sock: net.Socket, deviceId: string): void {
     cleanupCalled = true;
     if (socket !== sock) return; // stale socket guard
 
-    // Reject pending requests
-    for (const [id, entry] of pendingRequests) {
-      clearTimeout(entry.timer);
-      entry.reject(
-        new Error(
-          "Socket closed. The device may have disconnected. " +
-            "Reconnection will be attempted automatically when the device is available.",
-        ),
-      );
-      pendingRequests.delete(id);
-    }
+    rejectAllPending(
+      "Socket closed. The device may have disconnected. " +
+        "Reconnection will be attempted automatically when the device is available.",
+    );
 
     const wasConnected = state === "connected";
     socket = null;
     connectedDeviceId = null;
 
-    // Notify disconnect callback only if a connection was actually established.
     if (wasConnected) {
-      try {
-        disconnectCallback?.();
-      } catch (err) {
-        console.error("Disconnect callback error:", err instanceof Error ? err.message : err);
-      }
+      notifyDisconnect();
     }
 
     if (!targetDeviceId) {
