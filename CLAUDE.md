@@ -5,7 +5,7 @@
 MCP server + Android agent for controlling Android device GPS location during QA testing.
 
 Two components:
-- **MCP Server** (`server/`) — TypeScript/Node.js, exposes 8 location tools via MCP protocol
+- **MCP Server** (`server/`) — TypeScript/Node.js, exposes 9 location tools via MCP protocol
 - **Android Agent** (`android/`) — Kotlin/Compose app, foreground service that sets mock locations via `LocationManager`
 
 Communication: MCP client ←MCP (stdio)→ Server ←TCP port 5005 (via `adb forward`)→ Android Agent
@@ -28,7 +28,7 @@ echo '{"id":"test","type":"status"}' | nc localhost 5005
 
 ```
 server/src/
-  index.ts          # MCP server, all 8 tool definitions (Zod schemas)
+  index.ts          # MCP server, all 9 tool definitions (Zod schemas)
   device.ts         # ADB commands + TCP socket to agent
   geocode.ts        # Geocoding providers (Nominatim/Google/Mapbox)
   routing.ts        # Routing providers (OSRM/Google/Mapbox)

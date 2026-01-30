@@ -1,6 +1,6 @@
 # MCP Server — android-mock-location-mcp
 
-MCP server that exposes 8 tools for controlling Android device GPS location. Connects to an Android agent app over TCP (via ADB port forwarding) and supports geocoding and street-level routing through configurable providers.
+MCP server that exposes 9 tools for controlling Android device GPS location. Connects to an Android agent app over TCP (via ADB port forwarding) and supports geocoding and street-level routing through configurable providers.
 
 See the [root README](../README.md) for project overview and quick start.
 
@@ -102,6 +102,8 @@ Simulate movement along a route between two points at a given speed. Routes foll
 
 Provide either `from`/`to` (place names) or `fromLat`/`fromLng`/`toLat`/`toLng` (coordinates) for each endpoint.
 
+**Starting location auto-resolve:** If no `from`/`fromLat`/`fromLng` is provided, the tool automatically tries (in order): the last mock location, the device's real GPS position via `geo_get_location`, or returns an error asking the user for their starting location.
+
 #### Routing Profiles
 
 | Profile | Use for | Routes on |
@@ -178,11 +180,21 @@ Get current connection and simulation status.
 
 No parameters.
 
+---
+
+### `geo_get_location`
+
+Get the device's current real GPS location (last known position from the device's location sensors). Use this to determine where the device physically is before simulating a route.
+
+No parameters.
+
+Returns the device's latitude and longitude if a recent GPS fix is available, along with `accuracy` (horizontal accuracy in meters) and `ageMs` (milliseconds since the fix was obtained) when provided by the device. If the device has no location fix, the tool returns an error message — in that case, ask the user for their current location.
+
 ## Source Structure
 
 | File | Purpose |
 |------|---------|
-| `src/index.ts` | MCP server setup, all 8 tool definitions with Zod schemas |
+| `src/index.ts` | MCP server setup, all 9 tool definitions with Zod schemas |
 | `src/device.ts` | ADB commands (`execFileSync`), TCP socket to agent, request/response matching |
 | `src/geocode.ts` | Geocoding providers: Nominatim, Google, Mapbox |
 | `src/routing.ts` | Routing providers: OSRM, Google Routes API, Mapbox Directions |

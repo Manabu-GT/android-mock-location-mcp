@@ -21,11 +21,33 @@ import {
 const require = createRequire(import.meta.url);
 const { version } = require("../package.json") as { version: string };
 
+// ── Device Response Types ────────────────────────────────────────────────────
+
+interface DeviceLocationResponse {
+  success?: boolean;
+  lat?: number;
+  lng?: number;
+  accuracy?: number;
+  ageMs?: number;
+  error?: string;
+}
+
+function isLocationSuccess(
+  res: DeviceLocationResponse,
+): res is DeviceLocationResponse & { success: true; lat: number; lng: number } {
+  return (
+    res.success === true &&
+    typeof res.lat === "number" &&
+    typeof res.lng === "number" &&
+    !Number.isNaN(res.lat) &&
+    !Number.isNaN(res.lng)
+  );
+}
+
 // ── Simulation State ─────────────────────────────────────────────────────────
 
 let simulationTimer: ReturnType<typeof setInterval> | null = null;
-let lastLat: number | null = null;
-let lastLng: number | null = null;
+let lastLocation: Readonly<{ lat: number; lng: number }> | null = null;
 
 function stopSimulation(): void {
   if (simulationTimer !== null) {
@@ -84,7 +106,7 @@ server.registerTool(
       if (res.success) return text(`Connected to ${deviceId}. Agent is running.`);
       return text(`Connected to ${deviceId}, but agent returned unexpected response.`);
     } catch (err) {
-      return text(`Failed to connect to ${deviceId}: ${(err as Error).message}`);
+      return text(`Failed to connect to ${deviceId}: ${err instanceof Error ? err.message : String(err)}`);
     }
   },
 );
@@ -132,18 +154,17 @@ server.registerTool(
       let msg = `Location set to ${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}`;
       if (resolvedName) msg += ` (${resolvedName})`;
 
-      if (lastLat !== null && lastLng !== null) {
-        const dist = haversineDistance(lastLat, lastLng, coords.lat, coords.lng);
+      if (lastLocation !== null) {
+        const dist = haversineDistance(lastLocation.lat, lastLocation.lng, coords.lat, coords.lng);
         if (dist > 100_000) {
           msg += `\n  Warning: Teleported ${(dist / 1000).toFixed(0)} km. Apps may flag this.`;
         }
       }
 
-      lastLat = coords.lat;
-      lastLng = coords.lng;
+      lastLocation = { lat: coords.lat, lng: coords.lng };
       return text(res.success ? msg : `Agent error: ${JSON.stringify(res)}`);
     } catch (err) {
-      return text(`Error: ${(err as Error).message}`);
+      return text(`Error: ${err instanceof Error ? err.message : String(err)}`);
     }
   },
 );
@@ -155,7 +176,9 @@ server.registerTool(
     description:
       "Simulate movement along a route between two points at a given speed. " +
       "Routes follow real streets via a routing provider (configurable via PROVIDER env var). " +
-      "Accepts place names (geocoded via configured provider) or lat/lng coordinates." + geocodeHint,
+      "Accepts place names (geocoded via configured provider) or lat/lng coordinates. " +
+      "If 'from' is omitted, automatically uses the current mock location, " +
+      "or the device's real GPS position, or asks the user for their starting location." + geocodeHint,
     inputSchema: {
       from: z.string().optional().describe("Starting place name or address"),
       to: z.string().optional().describe("Destination place name or address"),
@@ -190,7 +213,39 @@ server.registerTool(
       return { error: `Provide '${label}' place name or ${label}Lat/${label}Lng coordinates` };
     };
 
-    const start = await resolveEndpoint(from, fromLat, fromLng, "from");
+    // Resolve start: explicit args → last mock position → real device GPS → error
+    let start: { lat: number; lng: number } | { error: string };
+    if (from || (fromLat !== undefined && fromLng !== undefined)) {
+      start = await resolveEndpoint(from, fromLat, fromLng, "from");
+    } else if (lastLocation !== null) {
+      start = { lat: lastLocation.lat, lng: lastLocation.lng };
+    } else if (isConnected()) {
+      try {
+        const loc = (await sendCommand({ type: "get_location" })) as DeviceLocationResponse;
+        if (isLocationSuccess(loc)) {
+          start = { lat: loc.lat, lng: loc.lng };
+        } else {
+          start = {
+            error:
+              "No starting location available. The device has no recent GPS fix. " +
+              "Ask the user for their starting location, or provide 'from' or fromLat/fromLng.",
+          };
+        }
+      } catch (err: unknown) {
+        start = {
+          error:
+            `Could not get device location: ${err instanceof Error ? err.message : String(err)}. ` +
+            "Ask the user for their starting location, or provide 'from' or fromLat/fromLng.",
+        };
+      }
+    } else {
+      start = {
+        error:
+          "No starting location provided and no device connected. " +
+          "Provide 'from' or fromLat/fromLng, or connect a device first.",
+      };
+    }
+
     const end = await resolveEndpoint(to, toLat, toLng, "to");
     if ("error" in start) return text(start.error);
     if ("error" in end) return text(end.error);
@@ -215,8 +270,7 @@ server.registerTool(
       speed: 0,
       bearing: bearingAlongRoute(route, 0),
     }).catch(() => {});
-    lastLat = startPoint.lat;
-    lastLng = startPoint.lng;
+    lastLocation = { lat: startPoint.lat, lng: startPoint.lng };
 
     simulationTimer = setInterval(() => {
       step++;
@@ -231,8 +285,7 @@ server.registerTool(
           speed: 0,
           bearing: 0,
         }).catch(() => {});
-        lastLat = endPoint.lat;
-        lastLng = endPoint.lng;
+        lastLocation = { lat: endPoint.lat, lng: endPoint.lng };
         stopSimulation();
         return;
       }
@@ -248,8 +301,7 @@ server.registerTool(
         speed: effectiveSpeed,
         bearing,
       }).catch(() => {});
-      lastLat = pos.lat;
-      lastLng = pos.lng;
+      lastLocation = { lat: pos.lat, lng: pos.lng };
     }, 1000);
 
     const etaMin = (totalSeconds / 60).toFixed(1);
@@ -354,8 +406,7 @@ server.registerTool(
         speed: 0,
         bearing: 0,
       }).catch(() => {});
-      lastLat = center.lat + offsetLat;
-      lastLng = center.lng + offsetLng;
+      lastLocation = { lat: center.lat + offsetLat, lng: center.lng + offsetLng };
     }, 1000);
 
     return text(
@@ -442,8 +493,7 @@ server.registerTool(
         speed: 0,
         bearing: 0,
       }).catch(() => {});
-      lastLat = pos.lat;
-      lastLng = pos.lng;
+      lastLocation = { lat: pos.lat, lng: pos.lng };
       idx++;
     }, 2000);
 
@@ -472,19 +522,65 @@ server.registerTool("geo_get_status", { description: "Get current connection and
   const lines: string[] = [];
   lines.push(`Device: ${getConnectedDeviceId() ?? "not connected"}`);
   lines.push(`Simulation: ${simulationTimer ? "active" : "idle"}`);
-  if (lastLat !== null && lastLng !== null) {
-    lines.push(`Last position: ${lastLat.toFixed(6)}, ${lastLng.toFixed(6)}`);
+  if (lastLocation !== null) {
+    lines.push(`Last position: ${lastLocation.lat.toFixed(6)}, ${lastLocation.lng.toFixed(6)}`);
   }
   if (isConnected()) {
     try {
       const res = (await sendCommand({ type: "status" })) as Record<string, unknown>;
       lines.push(`Agent: ${JSON.stringify(res)}`);
     } catch (err) {
-      lines.push(`Agent: unreachable (${(err as Error).message})`);
+      lines.push(`Agent: unreachable (${err instanceof Error ? err.message : String(err)})`);
     }
   }
   return text(lines.join("\n"));
 });
+
+// 9. geo_get_location
+server.registerTool(
+  "geo_get_location",
+  {
+    description:
+      "Get the device's current real GPS location (last known position from the device's location sensors). " +
+      "Only needed when no mock location is active and you need the device's physical position " +
+      "(e.g. as a starting point for a route). If a mock location is already set, use geo_get_status instead. " +
+      "If the device has no recent GPS fix, the tool will fail — in that case, ask the user for their current location.",
+  },
+  async () => {
+    if (!isConnected()) {
+      return text(
+        "Device not connected. Call geo_connect_device first.\n" +
+          "If you need the starting location for a route, ask the user where they are.",
+      );
+    }
+    try {
+      const res = (await sendCommand({ type: "get_location" })) as DeviceLocationResponse;
+      if (isLocationSuccess(res)) {
+        lastLocation = { lat: res.lat, lng: res.lng };
+        let msg = `Device location: ${res.lat.toFixed(6)}, ${res.lng.toFixed(6)}`;
+        const meta: string[] = [];
+        if (res.accuracy !== undefined && res.accuracy > 0) {
+          meta.push(`accuracy: ${res.accuracy.toFixed(1)}m`);
+        }
+        if (res.ageMs !== undefined && res.ageMs >= 0) {
+          const ageSec = Math.round(res.ageMs / 1000);
+          meta.push(ageSec < 3600 ? `age: ${ageSec}s` : `age: ${Math.round(ageSec / 60)}m`);
+        }
+        if (meta.length > 0) msg += ` (${meta.join(", ")})`;
+        return text(msg);
+      }
+      return text(
+        `Could not get device location: ${res.error ?? "unknown error"}\n` +
+          "Ask the user for their current location or provide coordinates directly.",
+      );
+    } catch (err) {
+      return text(
+        `Failed to get device location: ${err instanceof Error ? err.message : String(err)}\n` +
+          "Ask the user for their current location or provide coordinates directly.",
+      );
+    }
+  },
+);
 
 // ── Start ───────────────────────────────────────────────────────────────────
 
