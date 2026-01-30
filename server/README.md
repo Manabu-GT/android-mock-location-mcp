@@ -200,6 +200,13 @@ npm start         # Run the server
 
 The server communicates via stdio (MCP protocol). To test interactively, use the [MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector).
 
+## Known Limitations
+
+- **Single device only.** The server connects to one Android device at a time. Calling `geo_connect_device` with a different serial disconnects the previous device and stops any active simulation. Controlling multiple devices simultaneously is not supported.
+- **Single simulation.** Only one simulation (route, jitter, or geofence) runs at a time. Starting a new one stops the previous.
+
+See also: provider-specific limitations in the [Providers](#providers) table above.
+
 ## Adding a New Provider
 
 Both `src/geocode.ts` and `src/routing.ts` use the same pattern:
