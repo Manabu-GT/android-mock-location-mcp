@@ -256,13 +256,12 @@ Note: Location permissions and mock location app selection are handled automatic
 5. Waits 2 seconds for service initialization, then polls up to 5 times (1 second apart)
 6. Returns success if connection is established, or a troubleshooting message if not
 
-## Idle Timeout
+## Stopping Mock Location
 
-The agent automatically stops mock location emission after **10 minutes** of receiving no commands. This prevents indefinite mocking when the MCP server crashes, disconnects, or the user forgets to call `geo_stop`.
-
-The timeout is checked every second inside the location emit loop. Any command (`set_location`, `status`, `stop`, `get_location`) resets the timer. During active simulations (route, jitter, geofence), the server sends `set_location` every 1-2 seconds, so the timeout never triggers.
-
-Users can also stop mocking immediately via the **"Stop Mocking" notification action** visible in the device's notification shade while mock location is active.
+Mock location can be stopped in three ways:
+1. **`stop` command** — sent by the MCP server via `geo_stop`
+2. **Client disconnect** — if the TCP connection drops, the agent automatically stops mocking
+3. **Notification action** — users can tap "Stop Mocking" in the device's notification shade while mock location is active. This also closes the socket connection, which stops any server-side simulation.
 
 ## Implementation Notes
 

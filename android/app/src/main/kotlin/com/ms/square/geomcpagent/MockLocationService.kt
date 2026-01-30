@@ -76,12 +76,6 @@ class MockLocationService : Service() {
     createNotificationChannel()
     setupMockLocationProvider()
 
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-      registerReceiver(stopMockingReceiver, IntentFilter(ACTION_STOP_MOCKING), RECEIVER_NOT_EXPORTED)
-    } else {
-      registerReceiver(stopMockingReceiver, IntentFilter(ACTION_STOP_MOCKING))
-    }
-
     commandHandler = MockLocationCommandHandler(
       context = this,
       locationManager = locationManager,
@@ -93,6 +87,13 @@ class MockLocationService : Service() {
         setupMockLocationProvider()
       }
     )
+
+    // Register after commandHandler is initialised so the receiver can safely call it.
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+      registerReceiver(stopMockingReceiver, IntentFilter(ACTION_STOP_MOCKING), RECEIVER_NOT_EXPORTED)
+    } else {
+      registerReceiver(stopMockingReceiver, IntentFilter(ACTION_STOP_MOCKING))
+    }
 
     socketServer = AgentSocketServer(
       port = PORT,

@@ -70,7 +70,7 @@ function text(msg: string) {
 
 const isOsmProvider = !process.env.PROVIDER || ["osm", "osrm"].includes(process.env.PROVIDER.toLowerCase());
 const geocodeHint = isOsmProvider
-  ? " Prefer resolving place names to lat/lng coordinates yourself and passing them directly, as the default geocoder (Nominatim) is rate-limited. To resolve a place name: use WebSearch with `site:google.com/maps/place <place name>` to find an indexed Google Maps listing, then extract coordinates from the result URL — look for the `!3d<lat>!4d<lng>` parameters (e.g. `!3d40.0080766!4d-105.2342995`), or the `@lat,lng` segment (e.g. `@40.008,-105.234`). If no Maps result is found, pass the place name or address directly to the tool and let the server geocode it."
+  ? " Prefer resolving place names to lat/lng coordinates yourself and passing them directly, as the default geocoder (Nominatim) is rate-limited. To resolve a place name: use WebSearch with `site:google.com/maps/place <place name>` to find an indexed Google Maps listing, then extract coordinates from the result URL — look for the `!3d<lat>!4d<lng>` parameters (e.g. `!3d40.0080766!4d-105.2342995`), or the `@lat,lng` segment (e.g. `@40.008,-105.234`). If no Maps result is found, pass the place name or address directly to the tool and let the server geocode it. If the server geocoder also fails, do ONE targeted web search for the address/place coordinates — do not perform multiple rounds of searching."
   : "";
 
 // ── MCP Server ──────────────────────────────────────────────────────────────
@@ -135,8 +135,10 @@ server.registerTool(
     // Auto-start: set up permissions/mock location app, then launch agent service
     try {
       ensureDeviceSetup(deviceId);
-    } catch {
-      // Non-fatal: permissions may already be granted, or device may not support pm grant
+    } catch (setupErr) {
+      // Non-fatal: permissions may already be granted, or device may not support pm grant.
+      // Log so failures are diagnosable.
+      console.error(`[geo_connect_device] ensureDeviceSetup failed (non-fatal): ${setupErr instanceof Error ? setupErr.message : String(setupErr)}`);
     }
     try {
       startAgentService(deviceId);
