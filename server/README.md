@@ -188,7 +188,7 @@ Get the device's current real GPS location (last known position from the device'
 
 No parameters.
 
-Returns the device's latitude and longitude if a recent GPS fix is available. If the device has no location fix, the tool returns an error message — in that case, ask the user for their current location.
+Returns the device's latitude and longitude if a recent GPS fix is available, along with `accuracy` (horizontal accuracy in meters) and `ageMs` (milliseconds since the fix was obtained) when provided by the device. If the device has no location fix, the tool returns an error message — in that case, ask the user for their current location.
 
 ## Source Structure
 

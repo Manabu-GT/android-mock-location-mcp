@@ -163,7 +163,9 @@ Get the device's real GPS location (last known position from Android's location 
   "id": "550e8400-e29b-41d4-a716-446655440000",
   "success": true,
   "lat": 40.0005,
-  "lng": -105.235
+  "lng": -105.235,
+  "accuracy": 12.3,
+  "ageMs": 4520
 }
 ```
 
@@ -177,13 +179,15 @@ Get the device's real GPS location (last known position from Android's location 
 }
 ```
 
-| Field     | Type    | Present            | Description                                  |
-|-----------|---------|--------------------|----------------------------------------------|
-| `id`      | string  | always             | Echoed request ID                            |
-| `success` | boolean | always             | `true` if a location was found               |
-| `lat`     | number  | when `success=true` | Device latitude from last known GPS fix      |
-| `lng`     | number  | when `success=true` | Device longitude from last known GPS fix     |
-| `error`   | string  | when `success=false`| Human-readable reason location is unavailable |
+| Field      | Type    | Present             | Description                                   |
+|------------|---------|---------------------|-----------------------------------------------|
+| `id`       | string  | always              | Echoed request ID                             |
+| `success`  | boolean | always              | `true` if a location was found                |
+| `lat`      | number  | when `success=true` | Device latitude from last known GPS fix       |
+| `lng`      | number  | when `success=true` | Device longitude from last known GPS fix      |
+| `accuracy` | number  | when `success=true` | Horizontal accuracy in meters (omitted if unavailable) |
+| `ageMs`    | number  | when `success=true` | Milliseconds since the fix was obtained       |
+| `error`    | string  | when `success=false`| Human-readable reason location is unavailable |
 
 ---
 
