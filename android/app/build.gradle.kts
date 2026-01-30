@@ -23,6 +23,18 @@ android {
     } ?: error("versionName must be set")
   }
 
+  signingConfigs {
+    val keystorePath = System.getenv("SIGNING_KEYSTORE_PATH")
+    if (keystorePath != null) {
+      create("release") {
+        storeFile = file(keystorePath)
+        storePassword = System.getenv("SIGNING_KEYSTORE_PASSWORD")
+        keyAlias = System.getenv("SIGNING_KEY_ALIAS")
+        keyPassword = System.getenv("SIGNING_KEY_PASSWORD")
+      }
+    }
+  }
+
   buildTypes {
     release {
       isMinifyEnabled = false
@@ -30,6 +42,7 @@ android {
         getDefaultProguardFile("proguard-android-optimize.txt"),
         "proguard-rules.pro"
       )
+      signingConfigs.findByName("release")?.let { signingConfig = it }
     }
   }
 

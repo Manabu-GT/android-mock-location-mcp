@@ -46,7 +46,7 @@ The workflow will:
 
 The workflow will:
 1. Validate the version format and verify `build.gradle.kts` matches
-2. Build the release APK
+2. Build and **sign** the release APK (requires signing secrets — see [Android Signing Setup](#android-signing-setup))
 3. Create git tag `android-v0.2.0` and a GitHub Release with the APK attached as `android-mock-location-mcp-agent.apk`
 
 ## Version Files
@@ -64,6 +64,42 @@ Before triggering a release workflow, update the relevant version file for that 
 
 - Server: `server-v{version}` (e.g., `server-v0.2.0`)
 - Android: `android-v{version}` (e.g., `android-v0.2.0`)
+
+## Android Signing Setup
+
+The release workflow signs the APK using a keystore stored as GitHub secrets. This is a **one-time setup**.
+
+### 1. Generate a keystore
+
+```bash
+keytool -genkeypair \
+  -keystore release.keystore \
+  -alias release \
+  -keyalg RSA -keysize 2048 \
+  -validity 10000 \
+  -storepass <store-password> \
+  -keypass <key-password> \
+  -dname "CN=Android Mock Location MCP"
+```
+
+### 2. Add GitHub secrets
+
+Go to **Settings → Secrets and variables → Actions** and add:
+
+| Secret                       | Value                                                  |
+|------------------------------|--------------------------------------------------------|
+| `SIGNING_KEYSTORE_BASE64`    | Base64-encoded keystore: `base64 -i release.keystore`  |
+| `SIGNING_KEYSTORE_PASSWORD`  | The `-storepass` value from step 1                     |
+| `SIGNING_KEY_ALIAS`          | The `-alias` value from step 1 (e.g., `release`)      |
+| `SIGNING_KEY_PASSWORD`       | The `-keypass` value from step 1                       |
+
+### 3. Delete the local keystore
+
+```bash
+rm release.keystore
+```
+
+The keystore only needs to exist as a GitHub secret. Keep a secure backup outside the repository.
 
 ## CI Workflows
 

@@ -81,14 +81,30 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Decode signing keystore
+        env:
+          SIGNING_KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+        run: |
+          if [[ -z "$SIGNING_KEYSTORE_BASE64" ]]; then
+            echo "::error::SIGNING_KEYSTORE_BASE64 secret is not set. See PUBLISHING.md for setup instructions."
+            exit 1
+          fi
+          echo "$SIGNING_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+          echo "SIGNING_KEYSTORE_PATH=$RUNNER_TEMP/release.keystore" >> $GITHUB_ENV
+
       - name: Build release APK
+        env:
+          SIGNING_KEYSTORE_PATH: ${{ env.SIGNING_KEYSTORE_PATH }}
+          SIGNING_KEYSTORE_PASSWORD: ${{ secrets.SIGNING_KEYSTORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
         run: ./gradlew assembleRelease --stacktrace
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v6
         with:
           name: app-release
-          path: android/app/build/outputs/apk/release/app-release-unsigned.apk
+          path: android/app/build/outputs/apk/release/app-release.apk
 
   github-release:
     name: Create GitHub Release
@@ -125,7 +141,7 @@ jobs:
           name: app-release
 
       - name: Rename APK
-        run: mv app-release-unsigned.apk android-mock-location-mcp-agent.apk
+        run: mv app-release.apk android-mock-location-mcp-agent.apk
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
