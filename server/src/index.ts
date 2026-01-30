@@ -155,7 +155,9 @@ server.registerTool(
     description:
       "Simulate movement along a route between two points at a given speed. " +
       "Routes follow real streets via a routing provider (configurable via PROVIDER env var). " +
-      "Accepts place names (geocoded via configured provider) or lat/lng coordinates." + geocodeHint,
+      "Accepts place names (geocoded via configured provider) or lat/lng coordinates. " +
+      "If 'from' is omitted, automatically uses the current mock location, " +
+      "or the device's real GPS position, or asks the user for their starting location." + geocodeHint,
     inputSchema: {
       from: z.string().optional().describe("Starting place name or address"),
       to: z.string().optional().describe("Destination place name or address"),
@@ -190,7 +192,44 @@ server.registerTool(
       return { error: `Provide '${label}' place name or ${label}Lat/${label}Lng coordinates` };
     };
 
-    const start = await resolveEndpoint(from, fromLat, fromLng, "from");
+    // Resolve start: explicit args → last mock position → real device GPS → error
+    let start: { lat: number; lng: number } | { error: string };
+    if (from || (fromLat !== undefined && fromLng !== undefined)) {
+      start = await resolveEndpoint(from, fromLat, fromLng, "from");
+    } else if (lastLat !== null && lastLng !== null) {
+      start = { lat: lastLat, lng: lastLng };
+    } else if (isConnected()) {
+      try {
+        const loc = (await sendCommand({ type: "get_location" })) as {
+          success?: boolean;
+          lat?: number;
+          lng?: number;
+          error?: string;
+        };
+        if (loc.success && loc.lat !== undefined && loc.lng !== undefined) {
+          start = { lat: loc.lat, lng: loc.lng };
+        } else {
+          start = {
+            error:
+              "No starting location available. The device has no recent GPS fix. " +
+              "Ask the user for their starting location, or provide 'from' or fromLat/fromLng.",
+          };
+        }
+      } catch {
+        start = {
+          error:
+            "Could not get device location. " +
+            "Ask the user for their starting location, or provide 'from' or fromLat/fromLng.",
+        };
+      }
+    } else {
+      start = {
+        error:
+          "No starting location provided and no device connected. " +
+          "Provide 'from' or fromLat/fromLng, or connect a device first.",
+      };
+    }
+
     const end = await resolveEndpoint(to, toLat, toLng, "to");
     if ("error" in start) return text(start.error);
     if ("error" in end) return text(end.error);
@@ -492,7 +531,8 @@ server.registerTool(
   {
     description:
       "Get the device's current real GPS location (last known position from the device's location sensors). " +
-      "Use this to determine where the device physically is before simulating a route. " +
+      "Only needed when no mock location is active and you need the device's physical position " +
+      "(e.g. as a starting point for a route). If a mock location is already set, use geo_get_status instead. " +
       "If the device has no recent GPS fix, the tool will fail — in that case, ask the user for their current location.",
   },
   async () => {

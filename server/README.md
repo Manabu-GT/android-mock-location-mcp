@@ -102,6 +102,8 @@ Simulate movement along a route between two points at a given speed. Routes foll
 
 Provide either `from`/`to` (place names) or `fromLat`/`fromLng`/`toLat`/`toLng` (coordinates) for each endpoint.
 
+**Starting location auto-resolve:** If no `from`/`fromLat`/`fromLng` is provided, the tool automatically tries (in order): the last mock location, the device's real GPS position via `geo_get_location`, or returns an error asking the user for their starting location.
+
 #### Routing Profiles
 
 | Profile | Use for | Routes on |
