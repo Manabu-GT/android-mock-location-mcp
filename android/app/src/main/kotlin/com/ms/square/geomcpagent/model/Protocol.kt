@@ -20,6 +20,8 @@ internal data class AgentResponse(
   val success: Boolean,
   val lat: Double? = null,
   val lng: Double? = null,
+  val accuracy: Float? = null,
+  val ageMs: Long? = null,
   val active: Boolean? = null,
   val error: String? = null,
 )
