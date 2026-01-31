@@ -223,20 +223,20 @@ The MCP server can automatically start the agent service via ADB when `geo_conne
 **Mechanism**: The server performs three steps via ADB:
 
 1. **Install check** — verifies the app is present:
-```
+```bash
 adb -s <deviceId> shell pm path com.ms.square.geomcpagent
 ```
 If not installed, returns an error with install instructions.
 
 2. **Device setup** — grants permissions and sets the mock location app:
-```
+```bash
 adb -s <deviceId> shell pm grant com.ms.square.geomcpagent android.permission.ACCESS_FINE_LOCATION
 adb -s <deviceId> shell pm grant com.ms.square.geomcpagent android.permission.ACCESS_COARSE_LOCATION
 adb -s <deviceId> shell appops set com.ms.square.geomcpagent android:mock_location allow
 ```
 
 3. **Service launch** — starts the service directly (no Activity UI):
-```
+```bash
 adb -s <deviceId> shell am start-foreground-service -n com.ms.square.geomcpagent/.MockLocationService
 ```
 

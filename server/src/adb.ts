@@ -10,7 +10,8 @@ const execFileAsync = promisify(execFile);
 export const AGENT_PACKAGE = "com.ms.square.geomcpagent";
 export const AGENT_PORT = 5005;
 const ADB_TIMEOUT_MS = 10_000;
-const DEVICE_ID_PATTERN = /^[a-zA-Z0-9._:\-]+$/;
+// Covers emulator serials, USB serials, IPv4:port, and bracketed IPv6:port (e.g. [::1]:5555)
+const DEVICE_ID_PATTERN = /^(\[[a-fA-F0-9.:]+\](:\d+)?|[a-zA-Z0-9._:\-]+)$/;
 
 // ── Error Typing ─────────────────────────────────────────────────────────────
 
@@ -68,9 +69,10 @@ export function isAgentInstalled(deviceId: string): boolean {
     const output = adbDevice(deviceId, ["shell", "pm", "path", AGENT_PACKAGE]);
     return output.includes("package:");
   } catch (err) {
-    // `pm path` exits with code 1 and empty output when the package is not found.
-    // Any other failure (device offline, timeout, etc.) should propagate.
-    if (isExecError(err) && err.status === 1) {
+    // `pm path` exits with code 1 and empty stderr when the package is not found.
+    // ADB-level failures (device offline, unauthorized) also exit with code 1 but
+    // include an error message on stderr — those should propagate.
+    if (isExecError(err) && err.status === 1 && !err.stderr?.trim()) {
       return false;
     }
     throw err;
