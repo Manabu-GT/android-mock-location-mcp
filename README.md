@@ -8,7 +8,7 @@
 
 **Mock Android device GPS from any MCP client.** Control your test device's location for QA testing with built-in geocoding and street-level routing.
 
-https://github.com/user-attachments/assets/76833822-6599-421b-99a3-335f02699314
+<img src="art/mcp_mock_location_demo.gif" alt="Demo">
 
 ```
 "Drive from downtown Denver to the airport with rush hour traffic"
@@ -16,7 +16,7 @@ https://github.com/user-attachments/assets/76833822-6599-421b-99a3-335f02699314
 "Test the geofence at the nearest Whole Foods - bounce in and out 3 times"
 ```
 
-## Why android-mock-location-mcp?
+## Why?
 
 Testing location-aware apps is painful. You either:
 - Physically walk around with a device
