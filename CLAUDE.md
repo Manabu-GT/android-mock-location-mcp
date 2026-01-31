@@ -29,7 +29,8 @@ echo '{"id":"test","type":"status"}' | nc localhost 5005
 ```
 server/src/
   index.ts          # MCP server, all 9 tool definitions (Zod schemas)
-  device.ts         # ADB commands + TCP socket to agent
+  adb.ts            # ADB command execution with timeouts, device setup, agent install check
+  device.ts         # TCP socket to agent, connection state machine
   geocode.ts        # Geocoding providers (Nominatim/Google/Mapbox)
   routing.ts        # Routing providers (OSRM/Google/Mapbox)
   geo-math.ts       # Haversine distance, bearing calculation
@@ -55,8 +56,7 @@ See [server/README.md](server/README.md) for full provider reference and env var
 
 - **OSRM car-only**: Public OSRM server only supports `car` profile. `foot`/`bike` silently return car routes. Use `google` or `mapbox` for walking/cycling.
 - **Nominatim rate limit**: 1 req/sec. Server hints AI to pass lat/lng directly when using OSM provider.
-- **Mock location setup**: Device must have Developer Options enabled and this app selected as mock location app. See [android/README.md](android/README.md).
-- **ADB port forwarding**: Required before connecting: `adb forward tcp:5005 tcp:5005`. The server runs this automatically via `geo_connect_device`.
+- **Mock location setup**: Device must have Developer Options and USB Debugging enabled. The server auto-configures permissions, mock location app, service start, and port forwarding via `geo_connect_device`. See [android/README.md](android/README.md) for manual setup.
 - **Single simulation**: Only one simulation runs at a time. Starting a new one stops the previous.
 - **Device disconnect**: Socket auto-reconnects once, but if the MCP server restarts, user must call `geo_connect_device` again.
 - **Newline-delimited JSON**: Protocol uses `\n`-delimited JSON with UUID `id` fields for request/response matching. See [protocol/PROTOCOL.md](protocol/PROTOCOL.md).

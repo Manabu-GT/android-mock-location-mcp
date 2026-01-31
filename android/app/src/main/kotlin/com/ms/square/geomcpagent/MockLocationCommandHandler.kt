@@ -56,6 +56,20 @@ internal class MockLocationCommandHandler(
     locationEmitJob = null
   }
 
+  /** Stop mocking (called from notification action or client disconnect). */
+  fun stopMocking() {
+    try {
+      cancelEmitLoop()
+      state.update { it.copy(isMocking = false, lat = 0.0, lng = 0.0) }
+      onResetMockProvider()
+      onNotificationUpdate("Waiting for connection")
+    } catch (e: SecurityException) {
+      Logger.w("Failed to stop mocking", e)
+    } catch (e: IllegalArgumentException) {
+      Logger.w("Failed to stop mocking", e)
+    }
+  }
+
   private fun handleSetLocation(request: AgentRequest): AgentResponse {
     return try {
       if (request.lat !in MIN_LATITUDE..MAX_LATITUDE) {
@@ -120,7 +134,7 @@ internal class MockLocationCommandHandler(
   }
 
   private fun startLocationEmitLoop(mock: MockLocation) {
-    locationEmitJob?.cancel()
+    cancelEmitLoop()
     locationEmitJob = scope.launch {
       try {
         while (true) {
@@ -142,8 +156,7 @@ internal class MockLocationCommandHandler(
   }
 
   private fun handleStop(request: AgentRequest): AgentResponse = try {
-    locationEmitJob?.cancel()
-    locationEmitJob = null
+    cancelEmitLoop()
 
     state.update { it.copy(isMocking = false, lat = 0.0, lng = 0.0) }
 

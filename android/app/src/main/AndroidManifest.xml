@@ -38,11 +38,11 @@
             </intent-filter>
         </activity>
 
-        <!-- Mock location foreground service -->
+        <!-- Mock location foreground service (exported so ADB can start it directly) -->
         <service
             android:name=".MockLocationService"
             android:enabled="true"
-            android:exported="false"
+            android:exported="true"
             android:foregroundServiceType="location" />
 
     </application>

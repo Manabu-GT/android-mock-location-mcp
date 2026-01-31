@@ -99,8 +99,12 @@ class MainActivity : ComponentActivity() {
     // Re-check in case user granted via Settings or selected mock location app
     checkPermissions()
     checkMockLocationAppSelected()
-    // Try to bind — succeeds only if service is already running (flag 0 = don't auto-create)
-    bindService(Intent(this, MockLocationService::class.java), connection, 0)
+    // Try to bind — succeeds only if service is already running (flag 0 = don't auto-create).
+    // Handles the case where the service was started externally (via ADB) without the Activity.
+    // When the user later opens the app, onStart binds to show current state in the UI.
+    if (!bound) {
+      bound = bindService(Intent(this, MockLocationService::class.java), connection, 0)
+    }
   }
 
   override fun onStop() {
@@ -143,13 +147,11 @@ class MainActivity : ComponentActivity() {
     if (!permissionsGranted) return
 
     val intent = Intent(this, MockLocationService::class.java)
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-      startForegroundService(intent)
-    } else {
-      startService(intent)
-    }
+    startForegroundService(intent)
     // Bind to get the service reference
-    bindService(intent, connection, Context.BIND_AUTO_CREATE)
+    if (!bound) {
+      bound = bindService(intent, connection, Context.BIND_AUTO_CREATE)
+    }
   }
 
   private fun stopMockService() {

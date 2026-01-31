@@ -216,6 +216,53 @@ Any command may return an error instead of its normal response.
 - **Missing or malformed `id`**: The agent returns an error response with `"id": null` and `"success": false`.
 - **Unknown command `type`**: The agent returns an error response with `"success": false` and an `"error"` string describing the unrecognized type.
 
+## Service Auto-Start
+
+The MCP server can automatically start the agent service via ADB when `geo_connect_device` detects that the service is not running. This eliminates the need for the user to manually open the app and tap "Start Service".
+
+**Mechanism**: The server performs three steps via ADB:
+
+1. **Install check** — verifies the app is present:
+```bash
+adb -s <deviceId> shell pm path com.ms.square.geomcpagent
+```
+If not installed, returns an error with install instructions.
+
+2. **Device setup** — grants permissions and sets the mock location app:
+```bash
+adb -s <deviceId> shell pm grant com.ms.square.geomcpagent android.permission.ACCESS_FINE_LOCATION
+adb -s <deviceId> shell pm grant com.ms.square.geomcpagent android.permission.ACCESS_COARSE_LOCATION
+adb -s <deviceId> shell appops set com.ms.square.geomcpagent android:mock_location allow
+```
+
+3. **Service launch** — starts the service directly (no Activity UI):
+```bash
+adb -s <deviceId> shell am start-foreground-service -n com.ms.square.geomcpagent/.MockLocationService
+```
+
+The service is exported and starts without bringing the app to the foreground.
+
+**Prerequisites** (must be completed once, manually):
+1. The app must be installed on the device
+2. Developer Options must be enabled (Settings > About Phone > tap Build Number 7 times)
+
+Note: Location permissions and mock location app selection are handled automatically via ADB.
+
+**Flow**:
+1. `geo_connect_device` first attempts a direct TCP connection (service may already be running)
+2. If the connection fails, checks that the app is installed (returns install instructions if not)
+3. Runs device setup (permissions + mock location app) via ADB
+4. Starts the foreground service directly via ADB
+5. Waits 2 seconds for service initialization, then polls up to 5 times (1 second apart)
+6. Returns success if connection is established, or a troubleshooting message if not
+
+## Stopping Mock Location
+
+Mock location can be stopped in three ways:
+1. **`stop` command** — sent by the MCP server via `geo_stop`
+2. **Client disconnect** — if the TCP connection drops, the agent automatically stops mocking
+3. **Notification action** — users can tap "Stop Mocking" in the device's notification shade while mock location is active. This also closes the socket connection, which stops any server-side simulation.
+
 ## Implementation Notes
 
 - The Android agent sets mock locations via `LocationManager.setTestProviderLocation()`. The device must have **Developer Options** enabled and the agent selected as the **mock location app**.

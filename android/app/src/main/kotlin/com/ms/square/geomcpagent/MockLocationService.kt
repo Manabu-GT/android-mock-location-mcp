@@ -4,8 +4,12 @@ import android.annotation.SuppressLint
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.location.Criteria
 import android.location.LocationManager
@@ -14,6 +18,7 @@ import android.os.Binder
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import com.ms.square.geomcpagent.model.ServiceState
 import com.ms.square.geomcpagent.util.Logger
 import kotlinx.coroutines.CoroutineScope
@@ -32,6 +37,7 @@ private const val CHANNEL_ID = "geo_mcp_channel"
 private const val CHANNEL_NAME = "GeoMCP Agent"
 private const val PROVIDER_NAME = LocationManager.GPS_PROVIDER
 private const val PORT = 5005
+private const val ACTION_STOP_MOCKING = "com.ms.square.geomcpagent.STOP_MOCKING"
 
 class MockLocationService : Service() {
 
@@ -50,6 +56,19 @@ class MockLocationService : Service() {
   private lateinit var locationManager: LocationManager
   private lateinit var notificationManager: NotificationManager
   private lateinit var commandHandler: MockLocationCommandHandler
+
+  /** Handles the "Stop Mocking" notification action. */
+  private val stopMockingReceiver = object : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+      if (intent.action == ACTION_STOP_MOCKING) {
+        Logger.i("Stop mocking requested via notification action")
+        commandHandler.stopMocking()
+        // Close the client connection so the MCP server's simulation timer is also stopped.
+        // The server will auto-reconnect, but the simulation won't resume.
+        socketServer.disconnectClient()
+      }
+    }
+  }
 
   override fun onCreate() {
     locationManager = getSystemService(LocationManager::class.java)
@@ -70,6 +89,14 @@ class MockLocationService : Service() {
       }
     )
 
+    // Register after commandHandler is initialised so the receiver can safely call it.
+    ContextCompat.registerReceiver(
+      this,
+      stopMockingReceiver,
+      IntentFilter(ACTION_STOP_MOCKING),
+      ContextCompat.RECEIVER_NOT_EXPORTED
+    )
+
     socketServer = AgentSocketServer(
       port = PORT,
       scope = serviceScope,
@@ -78,6 +105,10 @@ class MockLocationService : Service() {
     socketServer.start()
 
     socketServer.connected.onEach { connected ->
+      if (!connected && _state.value.isMocking) {
+        Logger.i("Client disconnected, stopping mock location")
+        commandHandler.stopMocking()
+      }
       updateNotification(
         when {
           connected -> "Client connected"
@@ -112,6 +143,11 @@ class MockLocationService : Service() {
 
   override fun onDestroy() {
     _state.update { ServiceState() }
+    try {
+      unregisterReceiver(stopMockingReceiver)
+    } catch (_: IllegalArgumentException) {
+      // if the receiver was not previously registered or already unregistered.
+    }
     socketServer.stop()
     commandHandler.cancelEmitLoop()
     serviceScope.cancel()
@@ -119,27 +155,43 @@ class MockLocationService : Service() {
   }
 
   private fun createNotificationChannel() {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-      val channel = NotificationChannel(
-        CHANNEL_ID,
-        CHANNEL_NAME,
-        NotificationManager.IMPORTANCE_LOW
-      ).apply {
-        description = "GeoMCP Agent Service"
-      }
-      notificationManager.createNotificationChannel(channel)
+    val channel = NotificationChannel(
+      CHANNEL_ID,
+      CHANNEL_NAME,
+      NotificationManager.IMPORTANCE_LOW
+    ).apply {
+      description = "GeoMCP Agent Service"
     }
+    notificationManager.createNotificationChannel(channel)
   }
 
-  private fun buildNotification(text: String): Notification = NotificationCompat.Builder(this, CHANNEL_ID)
-    .setContentTitle("GeoMCP Agent")
-    .setContentText(text)
-    .setSmallIcon(android.R.drawable.ic_menu_mylocation)
-    .setPriority(NotificationCompat.PRIORITY_LOW)
-    .build()
+  private fun buildNotification(text: String, showStopAction: Boolean = false): Notification {
+    val builder = NotificationCompat.Builder(this, CHANNEL_ID)
+      .setContentTitle("GeoMCP Agent")
+      .setContentText(text)
+      .setSmallIcon(android.R.drawable.ic_menu_mylocation)
+      .setPriority(NotificationCompat.PRIORITY_LOW)
+
+    if (showStopAction) {
+      val stopIntent = PendingIntent.getBroadcast(
+        this,
+        0,
+        Intent(ACTION_STOP_MOCKING).setPackage(packageName),
+        PendingIntent.FLAG_IMMUTABLE
+      )
+      builder.addAction(
+        android.R.drawable.ic_media_pause,
+        "Stop Mocking",
+        stopIntent
+      )
+    }
+
+    return builder.build()
+  }
 
   private fun updateNotification(text: String) {
-    val notification = buildNotification(text)
+    val isMocking = _state.value.isMocking
+    val notification = buildNotification(text, showStopAction = isMocking)
     notificationManager.notify(NOTIFICATION_ID, notification)
   }
 
@@ -174,6 +226,8 @@ class MockLocationService : Service() {
       }
     } catch (e: IllegalArgumentException) {
       Logger.w("Mock location provider already exists", e)
+    } catch (e: SecurityException) {
+      Logger.w("MOCK_LOCATION permission is not granted", e)
     }
 
     try {
