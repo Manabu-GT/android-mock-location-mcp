@@ -61,7 +61,7 @@ No parameters.
 
 ### `geo_connect_device`
 
-Connect to an Android device for mock location control. Sets up ADB port forwarding and opens a TCP socket.
+Connect to an Android device for mock location control. Automatically grants permissions, selects the app as mock location provider, starts the agent service, sets up ADB port forwarding, and opens a TCP socket.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
@@ -195,7 +195,8 @@ Returns the device's latitude and longitude if a recent GPS fix is available, al
 | File | Purpose |
 |------|---------|
 | `src/index.ts` | MCP server setup, all 9 tool definitions with Zod schemas |
-| `src/device.ts` | ADB commands (`execFileSync`), TCP socket to agent, request/response matching |
+| `src/adb.ts` | ADB command execution with timeouts, device setup, agent install check |
+| `src/device.ts` | TCP socket to agent, connection state machine, request/response matching |
 | `src/geocode.ts` | Geocoding providers: Nominatim, Google, Mapbox |
 | `src/routing.ts` | Routing providers: OSRM, Google Routes API, Mapbox Directions |
 | `src/geo-math.ts` | Haversine distance, forward bearing calculation |

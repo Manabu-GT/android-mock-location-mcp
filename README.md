@@ -110,14 +110,13 @@ adb install -r android-mock-location-mcp-agent.apk
 
 To build from source, see [android/README.md](android/README.md#build-and-install).
 
-### 4. Enable Mock Location
+### 4. Enable Developer Options
 
-1. Enable **Developer Options** on your device (tap Build Number 7 times)
-2. Go to **Settings → Developer Options → Select mock location app**
-3. Choose **GeoMCP Agent**
-4. Open the app and tap **Start Service**
+Enable **Developer Options** on your device (Settings → About Phone → tap Build Number 7 times) and turn on **USB Debugging**.
 
-See [android/README.md](android/README.md) for detailed setup and troubleshooting.
+That's it — the server automatically configures mock location permissions, starts the agent service, and sets up port forwarding when you first use a location tool.
+
+See [android/README.md](android/README.md) for manual setup and troubleshooting.
 
 ### 5. Use It
 

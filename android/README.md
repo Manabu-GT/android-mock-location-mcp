@@ -6,7 +6,7 @@ See the [root README](../README.md) for project overview and quick start.
 
 ## Requirements
 
-- Android device or emulator (minSdk 24 / Android 7.0+)
+- Android device or emulator (minSdk 26 / Android 8.0+)
 - compileSdk 36, targetSdk 36
 - JVM 21 (Gradle toolchain)
 
@@ -28,22 +28,23 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 ## Device Setup
 
+### Automatic (recommended)
+
+The MCP server handles setup automatically when you first use a location tool:
+1. **Enable Developer Options** — Go to Settings → About Phone → tap "Build Number" 7 times
+2. **Enable USB Debugging** — Settings → Developer Options → USB Debugging
+3. **Connect your device** via USB (or wireless ADB)
+
+The server automatically grants location permissions, selects the app as mock location provider, starts the foreground service, and sets up ADB port forwarding.
+
+### Manual
+
+If you prefer to set up manually (or for troubleshooting):
 1. **Enable Developer Options** — Go to Settings → About Phone → tap "Build Number" 7 times
 2. **Select mock location app** — Settings → Developer Options → "Select mock location app" → choose **GeoMCP Agent**
 3. **Grant permissions** — Open the app, grant location permissions when prompted
 4. **Start the service** — Tap "Start Service" in the app
-
-The app must be running with the service active before connecting from the MCP server.
-
-## ADB Port Forwarding
-
-The MCP server communicates with the agent over TCP port 5005. ADB forwards this port from your machine to the device:
-
-```bash
-adb forward tcp:5005 tcp:5005
-```
-
-> **Note:** The `geo_connect_device` MCP tool runs this command automatically. You only need to run it manually for direct testing.
+5. **Set up port forwarding** — `adb forward tcp:5005 tcp:5005`
 
 **Manual test:**
 ```bash
@@ -97,9 +98,10 @@ Full specification: [protocol/PROTOCOL.md](../protocol/PROTOCOL.md)
 - On Android 12+, you may need to grant permissions in Settings → Apps → GeoMCP Agent → Permissions.
 
 **Can't connect from MCP server**
-- Ensure the service is running (green status in the app).
-- Run `adb forward tcp:5005 tcp:5005` manually.
 - Check `adb devices` shows your device.
+- Ensure Developer Options and USB Debugging are enabled.
+- Try starting the service manually from the app.
+- Run `adb forward tcp:5005 tcp:5005` manually.
 - Only one TCP client can connect at a time.
 
 **Connection drops during simulation**
