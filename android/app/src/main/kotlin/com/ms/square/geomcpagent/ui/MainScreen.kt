@@ -259,7 +259,8 @@ private fun SetupInstructionsCard() {
       Text(text = "3. Use any location tool from your MCP client", fontSize = 14.sp)
       Spacer(modifier = Modifier.height(8.dp))
       Text(
-        text = "The server automatically configures mock location permissions, starts this service, and sets up port forwarding.",
+        text = "The server automatically configures mock location permissions, " +
+          "starts this service, and sets up port forwarding.",
         fontSize = 13.sp,
         color = MaterialTheme.colorScheme.onSurfaceVariant
       )

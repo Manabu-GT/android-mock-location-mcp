@@ -172,7 +172,8 @@ class MockLocationService : Service() {
 
     if (showStopAction) {
       val stopIntent = PendingIntent.getBroadcast(
-        this, 0,
+        this,
+        0,
         Intent(ACTION_STOP_MOCKING).setPackage(packageName),
         PendingIntent.FLAG_IMMUTABLE
       )
