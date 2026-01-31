@@ -18,6 +18,7 @@ import android.os.Binder
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import com.ms.square.geomcpagent.model.ServiceState
 import com.ms.square.geomcpagent.util.Logger
 import kotlinx.coroutines.CoroutineScope
@@ -89,11 +90,12 @@ class MockLocationService : Service() {
     )
 
     // Register after commandHandler is initialised so the receiver can safely call it.
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-      registerReceiver(stopMockingReceiver, IntentFilter(ACTION_STOP_MOCKING), RECEIVER_NOT_EXPORTED)
-    } else {
-      registerReceiver(stopMockingReceiver, IntentFilter(ACTION_STOP_MOCKING))
-    }
+    ContextCompat.registerReceiver(
+      this,
+      stopMockingReceiver,
+      IntentFilter(ACTION_STOP_MOCKING),
+      ContextCompat.RECEIVER_NOT_EXPORTED
+    )
 
     socketServer = AgentSocketServer(
       port = PORT,

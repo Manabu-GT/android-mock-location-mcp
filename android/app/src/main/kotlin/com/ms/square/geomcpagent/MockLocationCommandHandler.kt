@@ -63,7 +63,9 @@ internal class MockLocationCommandHandler(
       state.update { it.copy(isMocking = false, lat = 0.0, lng = 0.0) }
       onResetMockProvider()
       onNotificationUpdate("Waiting for connection")
-    } catch (e: Exception) {
+    } catch (e: SecurityException) {
+      Logger.w("Failed to stop mocking", e)
+    } catch (e: IllegalArgumentException) {
       Logger.w("Failed to stop mocking", e)
     }
   }

@@ -99,11 +99,11 @@ class MainActivity : ComponentActivity() {
     // Re-check in case user granted via Settings or selected mock location app
     checkPermissions()
     checkMockLocationAppSelected()
-    // Try to bind — succeeds only if service is already running (flag 0 = don't auto-create)
-    // It's for the case where the service was started externally (via ADB am start-foreground-service) without the Activity.
-    // When the user later opens the app, onStart tries to bind to the already-running service so the UI can display its current state (mocking active, coordinates, etc.).
+    // Try to bind — succeeds only if service is already running (flag 0 = don't auto-create).
+    // Handles the case where the service was started externally (via ADB) without the Activity.
+    // When the user later opens the app, onStart binds to show current state in the UI.
     if (!bound) {
-      bindService(Intent(this, MockLocationService::class.java), connection, 0)
+      bound = bindService(Intent(this, MockLocationService::class.java), connection, 0)
     }
   }
 
@@ -150,7 +150,7 @@ class MainActivity : ComponentActivity() {
     startForegroundService(intent)
     // Bind to get the service reference
     if (!bound) {
-      bindService(intent, connection, Context.BIND_AUTO_CREATE)
+      bound = bindService(intent, connection, Context.BIND_AUTO_CREATE)
     }
   }
 
