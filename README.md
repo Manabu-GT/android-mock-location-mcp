@@ -2,7 +2,7 @@
 
 [![Server CI](https://github.com/Manabu-GT/android-mock-location-mcp/actions/workflows/server-ci.yml/badge.svg)](https://github.com/Manabu-GT/android-mock-location-mcp/actions/workflows/server-ci.yml)
 [![Android CI](https://github.com/Manabu-GT/android-mock-location-mcp/actions/workflows/android-ci.yml/badge.svg)](https://github.com/Manabu-GT/android-mock-location-mcp/actions/workflows/android-ci.yml)
-[![npm version](https://badge.fury.io/js/android-mock-location-mcp.svg)](https://www.npmjs.com/package/android-mock-location-mcp)
+[![npm version](https://img.shields.io/npm/v/android-mock-location-mcp)](https://www.npmjs.com/package/android-mock-location-mcp)
 ![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/Manabu-GT/android-mock-location-mcp?utm_source=oss&utm_medium=github&utm_campaign=Manabu-GT%2Fandroid-mock-location-mcp&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
