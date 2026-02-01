@@ -123,7 +123,7 @@ See [android/README.md](android/README.md) for manual setup and troubleshooting.
 In your MCP client:
 
 ```
-> Set location to Times Square New York
+> Set location to Times Square New York with 50m accuracy
 > Drive from here to SFO airport at 60 km/h
 ```
 
