@@ -81,6 +81,9 @@ jobs:
           cache: npm
           cache-dependency-path: server/package-lock.json
 
+      - name: Upgrade npm for Trusted Publishing (OIDC)
+        run: npm install -g npm@latest
+
       - name: Install dependencies
         run: npm ci
 
@@ -95,7 +98,7 @@ jobs:
         if: ${{ inputs.dry_run }}
         run: |
           echo "Dry run: Would publish version ${{ needs.validate.outputs.version }} to npm"
-          npm publish --access public --dry-run
+          npm publish --access public --provenance --dry-run
 
   github-release:
     name: Create GitHub Release
