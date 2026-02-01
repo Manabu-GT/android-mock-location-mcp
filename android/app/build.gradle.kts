@@ -13,7 +13,7 @@ android {
     applicationId = "com.ms.square.geomcpagent"
     minSdk = libs.versions.androidMinSdk.get().toInt()
     targetSdk = libs.versions.androidTargetSdk.get().toInt()
-    versionName = "0.1.1"
+    versionName = "0.2.0"
     // Derives versionCode from versionName: major*10000 + minor*100 + patch
     // Assumes minor and patch stay below 100; pre-release suffixes are stripped
     versionCode = versionName?.let { name ->
