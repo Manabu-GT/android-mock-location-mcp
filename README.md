@@ -103,7 +103,7 @@ For provider options (Google, Mapbox), see [Server Configuration](server/README.
 
 ### 3. Install the Android Agent
 
-Download the latest APK from [Releases](https://github.com/Manabu-GT/android-mock-location-mcp/releases) and install:
+Download the latest APK from [Releases](https://github.com/Manabu-GT/android-mock-location-mcp/releases/tag/android-v0.2.0) and install:
 ```bash
 adb install -r android-mock-location-mcp-agent.apk
 ```
