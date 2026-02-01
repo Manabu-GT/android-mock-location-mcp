@@ -52,13 +52,9 @@ This server **controls your Android device's GPS** with built-in geocoding and s
 
 ## Quick Start
 
-### 1. Install the MCP Server
+### 1. Configure Your MCP Client
 
-```bash
-npx android-mock-location-mcp
-```
-
-### 2. Configure Your MCP Client
+The server is launched automatically by your MCP client — you don't run it directly. Add it to your client's config:
 
 <details>
 <summary><b>Claude Desktop</b></summary>
@@ -101,7 +97,7 @@ claude mcp add android-mock-location-mcp -- npx -y android-mock-location-mcp
 
 For provider options (Google, Mapbox), see [Server Configuration](server/README.md#configuration).
 
-### 3. Install the Android Agent
+### 2. Install the Android Agent
 
 Download the latest APK from [Releases](https://github.com/Manabu-GT/android-mock-location-mcp/releases/tag/android-v0.2.0) and install:
 ```bash
@@ -110,7 +106,7 @@ adb install -r android-mock-location-mcp-agent.apk
 
 To build from source, see [android/README.md](android/README.md#build-and-install).
 
-### 4. Enable Developer Options
+### 3. Enable Developer Options
 
 Enable **Developer Options** on your device (Settings → About Phone → tap Build Number 7 times) and turn on **USB Debugging**.
 
@@ -118,7 +114,7 @@ That's it — the server automatically configures mock location permissions, sta
 
 See [android/README.md](android/README.md) for manual setup and troubleshooting.
 
-### 5. Use It
+### 4. Use It
 
 In your MCP client:
 
