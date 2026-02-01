@@ -137,6 +137,7 @@ In your MCP client:
 | `geo_test_geofence` | Test geofence entry/exit/bounce |
 | `geo_stop` | Stop any active simulation |
 | `geo_get_status` | Current mock location status |
+| `geo_get_location` | Get device's real GPS position (for use as route starting point) |
 | `geo_list_devices` | List connected Android devices |
 | `geo_connect_device` | Connect to specific device |
 
