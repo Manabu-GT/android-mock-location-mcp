@@ -6,15 +6,13 @@ See the [root README](../README.md) for project overview and quick start.
 
 ## Installation
 
-**npx (no install):**
-```bash
-npx android-mock-location-mcp
-```
+The server is launched automatically by your MCP client — you don't run it directly. The installation method determines how the client finds and starts it.
 
-**Global install:**
+**npx (no install needed):** Use `npx -y android-mock-location-mcp` as the command in your MCP client config. The client will download and run it automatically.
+
+**Global install:** Pre-install the package so the client can launch it without download delay:
 ```bash
 npm install -g android-mock-location-mcp
-android-mock-location-mcp
 ```
 
 **Build from source:**
@@ -22,8 +20,11 @@ android-mock-location-mcp
 cd server
 npm install
 npm run build
-npm start
 ```
+
+> **Updating:** `npx` caches packages after the first download. To force an update, temporarily change the command in your MCP client config to `npx -y android-mock-location-mcp@latest` and restart the client.
+
+See the [Configuration](#configuration) section below for how to set up your MCP client to launch the server.
 
 ## Configuration
 
@@ -34,6 +35,8 @@ npm start
 | `PROVIDER` | Provider for geocoding + routing: `osm` (default), `google`, `mapbox` | No (defaults to `osm`) |
 | `GOOGLE_API_KEY` | Google Places + Routes API key | When `PROVIDER=google` |
 | `MAPBOX_ACCESS_TOKEN` | Mapbox Geocoding + Directions access token | When `PROVIDER=mapbox` |
+
+Provider selection is resolved once at server startup. Changing `PROVIDER` or API keys requires restarting the MCP client (which restarts the server).
 
 Set environment variables in your MCP client configuration:
 
@@ -100,7 +103,7 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) o
 ```
 </details>
 
-After editing the config, restart the MCP server and Claude Desktop for changes to take effect.
+After editing the config, restart Claude Desktop to apply the changes (this restarts the MCP server automatically).
 
 <details>
 <summary><b>Claude Code (default OSM provider)</b></summary>
@@ -141,7 +144,7 @@ claude mcp add android-mock-location-mcp \
 <details>
 <summary><b>Claude Code — switching providers</b></summary>
 
-To switch from one provider to another (e.g. `osm` → `google`), remove and re-add the server with new env vars, then restart the server and Claude Code:
+To switch from one provider to another (e.g. `osm` → `google`), remove and re-add the server with new env vars, then restart Claude Code:
 
 ```bash
 # 1. Remove existing server
@@ -154,10 +157,10 @@ claude mcp add android-mock-location-mcp \
   -e GOOGLE_API_KEY=$GOOGLE_API_KEY \
   -- npx -y android-mock-location-mcp
 
-# 3. Restart the MCP server and Claude Code
+# 3. Restart Claude Code (this restarts the MCP server automatically)
 ```
 
-Environment variables are baked into the MCP server config at initialization time. Changing providers requires restarting the server.
+Provider selection is resolved once at server startup, so restarting is required for changes to take effect.
 </details>
 
 ### Providers
