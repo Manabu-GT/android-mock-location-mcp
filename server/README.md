@@ -91,9 +91,9 @@ GOOGLE_API_KEY=your-google-api-key claude mcp add android-mock-location-mcp -e P
 
 Google and Mapbox providers produce better results than the default OSM provider — more accurate geocoding, full routing profile support (car/foot/bike), and higher rate limits. Both offer free tiers.
 
-| `PROVIDER` | Geocoding Service | Routing Service | Profiles Supported | API Key | Cost |
-|------------|-------------------|-----------------|-------------------|---------|------|
-| `osm` (default) | Nominatim (OpenStreetMap) | OSRM | `car` only* | None | Free (rate-limited) |
+| `PROVIDER`    | Geocoding Service           | Routing Service | Profiles Supported | API Key                | Cost                 |
+| ------------- | --------------------------- | --------------- | ------------------ | ---------------------- | -------------------- |
+| `osm` (default) | Nominatim (OpenStreetMap) | OSRM            | `car` only*        | None                   | Free (rate-limited)  |
 | `google` | Google Geocoding API | Google Routes API | `car`, `foot`, `bike` | `GOOGLE_API_KEY` | Paid ([free tier](https://developers.google.com/maps/get-started)) |
 | `mapbox` | Mapbox Geocoding | Mapbox Directions | `car`, `foot`, `bike` | `MAPBOX_ACCESS_TOKEN` | Paid ([free tier](https://account.mapbox.com/access-tokens/)) |
 
