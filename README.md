@@ -181,7 +181,7 @@ For provider setup, env vars, and limitations, see [server/README.md](server/REA
 
 This server focuses on device location control. For other needs:
 - [mobile-mcp](https://github.com/mobile-next/mobile-mcp) — UI automation (tap, swipe, screenshots)
-- [MCP-Geo](https://github.com/webcoderz/MCP-Geo) — Geocoding (address → coordinates)
+- [Android-MCP](https://github.com/CursorTouch/Android-MCP) — Lightweight MCP server for interacting with Android OS (app navigation, UI interaction, automated testing)
 
 ## License
 
