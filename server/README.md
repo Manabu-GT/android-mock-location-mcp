@@ -32,10 +32,29 @@ npm start
 | Variable | Description | Required |
 |----------|-------------|----------|
 | `PROVIDER` | Provider for geocoding + routing: `osm` (default), `google`, `mapbox` | No (defaults to `osm`) |
-| `GOOGLE_API_KEY` | Google Geocoding + Routes API key | When `PROVIDER=google` |
+| `GOOGLE_API_KEY` | Google Places + Routes API key | When `PROVIDER=google` |
 | `MAPBOX_ACCESS_TOKEN` | Mapbox Geocoding + Directions access token | When `PROVIDER=mapbox` |
 
 Set environment variables in your MCP client configuration:
+
+<details>
+<summary><b>Claude Desktop (default OSM provider)</b></summary>
+
+Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
+
+```json
+{
+  "mcpServers": {
+    "android-mock-location-mcp": {
+      "command": "npx",
+      "args": ["-y", "android-mock-location-mcp"]
+    }
+  }
+}
+```
+
+No API key required. Uses free Nominatim geocoding and OSRM routing (car profile only).
+</details>
 
 <details>
 <summary><b>Claude Desktop with Google provider</b></summary>
@@ -56,6 +75,8 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) o
   }
 }
 ```
+
+**Prerequisites:** Enable both the [Places API (New)](https://console.cloud.google.com/apis/library/places.googleapis.com) and [Routes API](https://console.cloud.google.com/apis/library/routes.googleapis.com) in your Google Cloud project.
 </details>
 
 <details>
@@ -79,12 +100,64 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) o
 ```
 </details>
 
+After editing the config, restart the MCP server and Claude Desktop for changes to take effect.
+
+<details>
+<summary><b>Claude Code (default OSM provider)</b></summary>
+
+```bash
+claude mcp add android-mock-location-mcp -- npx -y android-mock-location-mcp
+```
+
+No API key required. Uses free Nominatim geocoding and OSRM routing (car profile only).
+</details>
+
 <details>
 <summary><b>Claude Code with Google provider</b></summary>
 
 ```bash
-GOOGLE_API_KEY=your-google-api-key claude mcp add android-mock-location-mcp -e PROVIDER=google -e GOOGLE_API_KEY=$GOOGLE_API_KEY -- npx -y android-mock-location-mcp
+GOOGLE_API_KEY=your-google-api-key
+claude mcp add android-mock-location-mcp \
+  -e PROVIDER=google \
+  -e GOOGLE_API_KEY=$GOOGLE_API_KEY \
+  -- npx -y android-mock-location-mcp
 ```
+
+**Prerequisites:** Enable both the [Places API (New)](https://console.cloud.google.com/apis/library/places.googleapis.com) and [Routes API](https://console.cloud.google.com/apis/library/routes.googleapis.com) in your Google Cloud project.
+</details>
+
+<details>
+<summary><b>Claude Code with Mapbox provider</b></summary>
+
+```bash
+MAPBOX_ACCESS_TOKEN=your-mapbox-access-token
+claude mcp add android-mock-location-mcp \
+  -e PROVIDER=mapbox \
+  -e MAPBOX_ACCESS_TOKEN=$MAPBOX_ACCESS_TOKEN \
+  -- npx -y android-mock-location-mcp
+```
+</details>
+
+<details>
+<summary><b>Claude Code — switching providers</b></summary>
+
+To switch from one provider to another (e.g. `osm` → `google`), remove and re-add the server with new env vars, then restart the server and Claude Code:
+
+```bash
+# 1. Remove existing server
+claude mcp remove android-mock-location-mcp
+
+# 2. Re-add with new provider
+GOOGLE_API_KEY=your-google-api-key
+claude mcp add android-mock-location-mcp \
+  -e PROVIDER=google \
+  -e GOOGLE_API_KEY=$GOOGLE_API_KEY \
+  -- npx -y android-mock-location-mcp
+
+# 3. Restart the MCP server and Claude Code
+```
+
+Environment variables are baked into the MCP server config at initialization time. Changing providers requires restarting the server.
 </details>
 
 ### Providers
@@ -94,7 +167,7 @@ Google and Mapbox providers produce better results than the default OSM provider
 | `PROVIDER`    | Geocoding Service           | Routing Service | Profiles Supported | API Key                | Cost                 |
 | ------------- | --------------------------- | --------------- | ------------------ | ---------------------- | -------------------- |
 | `osm` (default) | Nominatim (OpenStreetMap) | OSRM            | `car` only*        | None                   | Free (rate-limited)  |
-| `google` | Google Geocoding API | Google Routes API | `car`, `foot`, `bike` | `GOOGLE_API_KEY` | Paid ([free tier](https://developers.google.com/maps/get-started)) |
+| `google` | Google Places API | Google Routes API | `car`, `foot`, `bike` | `GOOGLE_API_KEY` | Paid ([free tier](https://developers.google.com/maps/get-started)) |
 | `mapbox` | Mapbox Geocoding | Mapbox Directions | `car`, `foot`, `bike` | `MAPBOX_ACCESS_TOKEN` | Paid ([free tier](https://account.mapbox.com/access-tokens/)) |
 
 **\*OSRM limitation:** The public OSRM demo server (`router.project-osrm.org`) only supports the `car` profile. Requesting `foot` or `bike` silently returns a driving route. For walking/cycling routing, use `google` or `mapbox`.
