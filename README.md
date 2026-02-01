@@ -95,6 +95,8 @@ claude mcp add android-mock-location-mcp -- npx -y android-mock-location-mcp
 ```
 </details>
 
+Restart your MCP client after updating the config for changes to take effect.
+
 For provider options (Google, Mapbox), see [Server Configuration](server/README.md#configuration).
 
 ### 2. Install the Android Agent
