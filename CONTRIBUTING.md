@@ -21,7 +21,7 @@ This project has two components — an **MCP server** (TypeScript/Node.js) and a
 **Android:**
 - Android Studio (Ladybug 2024.2+ recommended for bundled JDK 21)
 - JDK 21+
-- Android device or emulator (minSdk 24 / Android 7.0+)
+- Android device or emulator (minSdk 26 / Android 8.0+)
 
 ### Setup
 
