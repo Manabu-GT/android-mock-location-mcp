@@ -145,9 +145,57 @@ For full parameter reference, see [server/README.md](server/README.md#tool-refer
 
 ## Provider Configuration
 
-Works out of the box with **OpenStreetMap** (free, no API key). Also supports **Google** and **Mapbox** providers for full walking/cycling routing.
+Works out of the box with **OpenStreetMap** (free, no API key). For better results, consider using **Google** or **Mapbox** providers — they offer more accurate geocoding, full routing profile support (car/foot/bike), and higher rate limits.
 
-For provider setup, env vars, and limitations, see [server/README.md](server/README.md#configuration).
+The default OSM provider uses the public OSRM server which only supports car routing (foot/bike requests silently fall back to car routes), and Nominatim geocoding is rate-limited to 1 request per second.
+
+| Provider | Pros | Limitations | Get an API Key |
+|----------|------|-------------|----------------|
+| `osm` (default) | Free, no API key needed | Car routing only, 1 req/sec geocoding limit | — |
+| `google` | Accurate geocoding, full car/foot/bike routing | Requires API key (has free tier) | [Google Maps Platform](https://developers.google.com/maps/get-started) |
+| `mapbox` | Accurate geocoding, full car/foot/bike routing | Requires access token (has free tier) | [Mapbox Access Tokens](https://account.mapbox.com/access-tokens/) |
+
+To use Google or Mapbox, set the `PROVIDER` env var and the corresponding API key in your MCP client config:
+
+<details>
+<summary><b>Example: Claude Desktop with Google provider</b></summary>
+
+```json
+{
+  "mcpServers": {
+    "android-mock-location-mcp": {
+      "command": "npx",
+      "args": ["-y", "android-mock-location-mcp"],
+      "env": {
+        "PROVIDER": "google",
+        "GOOGLE_API_KEY": "your-google-api-key"
+      }
+    }
+  }
+}
+```
+</details>
+
+<details>
+<summary><b>Example: Claude Desktop with Mapbox provider</b></summary>
+
+```json
+{
+  "mcpServers": {
+    "android-mock-location-mcp": {
+      "command": "npx",
+      "args": ["-y", "android-mock-location-mcp"],
+      "env": {
+        "PROVIDER": "mapbox",
+        "MAPBOX_ACCESS_TOKEN": "your-mapbox-access-token"
+      }
+    }
+  }
+}
+```
+</details>
+
+For full provider details, see [server/README.md](server/README.md#configuration).
 
 ## Examples
 
