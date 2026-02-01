@@ -35,15 +35,67 @@ npm start
 | `GOOGLE_API_KEY` | Google Geocoding + Routes API key | When `PROVIDER=google` |
 | `MAPBOX_ACCESS_TOKEN` | Mapbox Geocoding + Directions access token | When `PROVIDER=mapbox` |
 
-Set environment variables in your MCP client configuration. See [root README](../README.md#provider-configuration) for client config examples.
+Set environment variables in your MCP client configuration:
+
+<details>
+<summary><b>Claude Desktop with Google provider</b></summary>
+
+Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
+
+```json
+{
+  "mcpServers": {
+    "android-mock-location-mcp": {
+      "command": "npx",
+      "args": ["-y", "android-mock-location-mcp"],
+      "env": {
+        "PROVIDER": "google",
+        "GOOGLE_API_KEY": "your-google-api-key"
+      }
+    }
+  }
+}
+```
+</details>
+
+<details>
+<summary><b>Claude Desktop with Mapbox provider</b></summary>
+
+Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
+
+```json
+{
+  "mcpServers": {
+    "android-mock-location-mcp": {
+      "command": "npx",
+      "args": ["-y", "android-mock-location-mcp"],
+      "env": {
+        "PROVIDER": "mapbox",
+        "MAPBOX_ACCESS_TOKEN": "your-mapbox-access-token"
+      }
+    }
+  }
+}
+```
+</details>
+
+<details>
+<summary><b>Claude Code with Google provider</b></summary>
+
+```bash
+GOOGLE_API_KEY=your-google-api-key claude mcp add android-mock-location-mcp -e PROVIDER=google -e GOOGLE_API_KEY=$GOOGLE_API_KEY -- npx -y android-mock-location-mcp
+```
+</details>
 
 ### Providers
+
+Google and Mapbox providers produce better results than the default OSM provider — more accurate geocoding, full routing profile support (car/foot/bike), and higher rate limits. Both offer free tiers.
 
 | `PROVIDER` | Geocoding Service | Routing Service | Profiles Supported | API Key | Cost |
 |------------|-------------------|-----------------|-------------------|---------|------|
 | `osm` (default) | Nominatim (OpenStreetMap) | OSRM | `car` only* | None | Free (rate-limited) |
-| `google` | Google Geocoding API | Google Routes API | `car`, `foot`, `bike` | `GOOGLE_API_KEY` | Paid (free tier) |
-| `mapbox` | Mapbox Geocoding | Mapbox Directions | `car`, `foot`, `bike` | `MAPBOX_ACCESS_TOKEN` | Paid (free tier) |
+| `google` | Google Geocoding API | Google Routes API | `car`, `foot`, `bike` | `GOOGLE_API_KEY` | Paid ([free tier](https://developers.google.com/maps/get-started)) |
+| `mapbox` | Mapbox Geocoding | Mapbox Directions | `car`, `foot`, `bike` | `MAPBOX_ACCESS_TOKEN` | Paid ([free tier](https://account.mapbox.com/access-tokens/)) |
 
 **\*OSRM limitation:** The public OSRM demo server (`router.project-osrm.org`) only supports the `car` profile. Requesting `foot` or `bike` silently returns a driving route. For walking/cycling routing, use `google` or `mapbox`.
 
