@@ -145,9 +145,15 @@ For full parameter reference, see [server/README.md](server/README.md#tool-refer
 
 ## Provider Configuration
 
-Works out of the box with **OpenStreetMap** (free, no API key). Also supports **Google** and **Mapbox** providers for full walking/cycling routing.
+Works out of the box with **OpenStreetMap** (free, no API key). For better results, consider using **Google** or **Mapbox** providers — they offer more accurate geocoding, full routing profile support (car/foot/bike), and higher rate limits.
 
-For provider setup, env vars, and limitations, see [server/README.md](server/README.md#configuration).
+| Provider        | Pros                          | Limitations                               | Get an API Key |
+| --------------- | ----------------------------- | ------------------------------------------ | -------------- |
+| `osm` (default) | Free, no API key needed       | Car routing only, 1 req/sec geocoding limit | — |
+| `google` | Accurate geocoding, full car/foot/bike routing | Requires API key (has free tier) | [Google Maps Platform](https://developers.google.com/maps/get-started) |
+| `mapbox` | Accurate geocoding, full car/foot/bike routing | Requires access token (has free tier) | [Mapbox Access Tokens](https://account.mapbox.com/access-tokens/) |
+
+For env vars, MCP client config examples, and provider details, see [server/README.md](server/README.md#configuration).
 
 ## Examples
 
