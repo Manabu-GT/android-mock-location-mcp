@@ -11,6 +11,8 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "prepare": "npm run build"
   },
   "dependencies": {
@@ -19,7 +21,8 @@
   },
   "devDependencies": {
     "typescript": "^5.9.3",
-    "@types/node": "^20.0.0"
+    "@types/node": "^20.0.0",
+    "vitest": "^3.0.0"
   },
   "keywords": [
     "mcp",
