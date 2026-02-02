@@ -18,8 +18,8 @@
     "zod": "^3.25.0"
   },
   "devDependencies": {
-    "typescript": "^5.8.0",
-    "@types/node": "^22.0.0"
+    "typescript": "^5.9.3",
+    "@types/node": "^22.19.7"
   },
   "keywords": [
     "mcp",
