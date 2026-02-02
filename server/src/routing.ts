@@ -52,7 +52,8 @@ export type RoutingProvider = (
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function buildCumulativeDistances(points: RoutePoint[]): number[] {
+/** @internal */
+export function buildCumulativeDistances(points: RoutePoint[]): number[] {
   const dists = [0];
   for (let i = 1; i < points.length; i++) {
     dists.push(dists[i - 1]! + haversineDistance(points[i - 1]!.lat, points[i - 1]!.lng, points[i]!.lat, points[i]!.lng));
@@ -60,7 +61,8 @@ function buildCumulativeDistances(points: RoutePoint[]): number[] {
   return dists;
 }
 
-function buildStraightLineRoute(
+/** @internal */
+export function buildStraightLineRoute(
   fromLat: number,
   fromLng: number,
   toLat: number,
@@ -132,7 +134,8 @@ const GOOGLE_TRAVEL_MODES: Record<RoutingProfile, string> = {
   bike: "BICYCLE",
 };
 
-function decodeGooglePolyline(encoded: string): RoutePoint[] {
+/** @internal */
+export function decodeGooglePolyline(encoded: string): RoutePoint[] {
   const points: RoutePoint[] = [];
   let index = 0;
   let lat = 0;
