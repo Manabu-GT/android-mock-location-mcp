@@ -21,7 +21,7 @@
   },
   "devDependencies": {
     "typescript": "^5.9.3",
-    "@types/node": "^20.0.0",
+    "@types/node": "^20.19.30",
     "vitest": "^3.0.0"
   },
   "keywords": [
