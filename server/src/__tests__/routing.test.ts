@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeAll } from "vitest";
+import { describe, test, expect } from "vitest";
 import { haversineDistance } from "../geo-math.js";
 import {
   buildCumulativeDistances,
@@ -8,16 +8,7 @@ import {
   bearingAlongRoute,
 } from "../routing.js";
 import type { RoutePoint, RouteResult } from "../routing.js";
-
-// Ensure default (osm) provider — avoids accidental provider selection errors.
-beforeAll(() => {
-  delete process.env.PROVIDER;
-});
-
-function expectCloseTo(actual: number, expected: number, tolerance: number) {
-  expect(actual).toBeGreaterThanOrEqual(expected - tolerance);
-  expect(actual).toBeLessThanOrEqual(expected + tolerance);
-}
+import { expectCloseTo } from "./test-utils.js";
 
 /** Build a RouteResult from an array of points for testing. */
 function makeRoute(points: RoutePoint[]): RouteResult {
@@ -226,6 +217,18 @@ describe("interpolateAlongRoute", () => {
     expect(p).toEqual({ lat: 5, lng: 10 });
   });
 
+  test("fraction = 0.5 with hardcoded distances returns midpoint", () => {
+    // Hardcoded RouteResult to verify interpolation independently of buildCumulativeDistances
+    const route: RouteResult = {
+      points: [{ lat: 0, lng: 0 }, { lat: 0, lng: 1 }, { lat: 0, lng: 2 }],
+      distanceMeters: 200,
+      cumulativeDistances: [0, 100, 200],
+      source: "test",
+    };
+    const p = interpolateAlongRoute(route, 0.5);
+    expect(p).toEqual({ lat: 0, lng: 1 });
+  });
+
   test("zero-length route [A,A] returns A with no NaN", () => {
     const route = makeRoute([
       { lat: 5, lng: 10 },
@@ -290,5 +293,14 @@ describe("bearingAlongRoute", () => {
       { lat: 1, lng: 1 },
     ]);
     expectCloseTo(bearingAlongRoute(route, -1), 90, 0.5);
+  });
+
+  test("fraction > 1 clamps to last segment bearing", () => {
+    const route = makeRoute([
+      { lat: 0, lng: 0 },
+      { lat: 0, lng: 1 },
+      { lat: 1, lng: 1 },
+    ]);
+    expectCloseTo(bearingAlongRoute(route, 2), 0, 0.5);
   });
 });

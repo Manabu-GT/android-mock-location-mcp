@@ -1,10 +1,6 @@
 import { describe, test, expect } from "vitest";
 import { haversineDistance, computeBearing } from "../geo-math.js";
-
-function expectCloseTo(actual: number, expected: number, tolerance: number) {
-  expect(actual).toBeGreaterThanOrEqual(expected - tolerance);
-  expect(actual).toBeLessThanOrEqual(expected + tolerance);
-}
+import { expectCloseTo } from "./test-utils.js";
 
 // ── haversineDistance ────────────────────────────────────────────────────────
 
@@ -83,15 +79,13 @@ describe("computeBearing", () => {
     expect(b).toBe(0);
   });
 
-  test("same point at pole returns value in 0-360 range", () => {
+  test("same point at pole returns 0", () => {
     const b = computeBearing(90, 0, 90, 0);
-    expect(b).toBeGreaterThanOrEqual(0);
-    expect(b).toBeLessThanOrEqual(360);
+    expect(b).toBe(0);
   });
 
-  test("southwest bearing >= 180 and < 360", () => {
+  test("southwest ~225 degrees", () => {
     const b = computeBearing(1, 1, 0, 0);
-    expect(b).toBeGreaterThanOrEqual(180);
-    expect(b).toBeLessThan(360);
+    expectCloseTo(b, 225, 1.0);
   });
 });
