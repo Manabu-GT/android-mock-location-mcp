@@ -20,7 +20,7 @@ adb devices  # should show emulator-5554 or similar
 
 ```
 server/src/
-  index.ts          # MCP server, all 8 tool definitions (Zod schemas)
+  index.ts          # MCP server, all 9 tool definitions (Zod schemas)
   emulator.ts       # Emulator connection management, NMEA-based location setting via ADB
   nmea.ts           # NMEA sentence generation (GPGGA + GPRMC with checksum)
   adb.ts            # ADB command execution with timeouts, emulator validation

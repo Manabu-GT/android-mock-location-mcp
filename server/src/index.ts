@@ -9,6 +9,7 @@ import { getRoute, interpolateAlongRoute, bearingAlongRoute } from "./routing.js
 import { createRequire } from "node:module";
 import {
   setLocation,
+  getLocation,
   connectEmulator,
   getConnectedDeviceId,
   isConnected,
@@ -163,7 +164,8 @@ server.registerTool(
       "Simulate movement along a route between two points at a given speed. " +
       "Routes follow real streets via a routing provider (configurable via PROVIDER env var). " +
       "Accepts place names (geocoded via configured provider) or lat/lng coordinates. " +
-      "If 'from' is omitted, automatically uses the current mock location as the starting point." + geocodeHint,
+      "If 'from' is omitted, automatically uses the current mock location, " +
+      "or the emulator's current GPS position, or asks the user for their starting location." + geocodeHint,
     inputSchema: {
       from: z.string().optional().describe("Starting place name or address"),
       to: z.string().optional().describe("Destination place name or address"),
@@ -198,17 +200,36 @@ server.registerTool(
       return { error: `Provide '${label}' place name or ${label}Lat/${label}Lng coordinates` };
     };
 
-    // Resolve start: explicit args → last mock position → error
+    // Resolve start: explicit args → last mock position → emulator GPS → error
     let start: { lat: number; lng: number } | { error: string };
     if (from || (fromLat !== undefined && fromLng !== undefined)) {
       start = await resolveEndpoint(from, fromLat, fromLng, "from");
     } else if (lastLocation !== null) {
       start = { lat: lastLocation.lat, lng: lastLocation.lng };
+    } else if (isConnected()) {
+      try {
+        const loc = getLocation();
+        if (loc) {
+          start = { lat: loc.lat, lng: loc.lng };
+        } else {
+          start = {
+            error:
+              "No starting location available. The emulator has no recent GPS fix. " +
+              "Ask the user for their starting location, or provide 'from' or fromLat/fromLng.",
+          };
+        }
+      } catch {
+        start = {
+          error:
+            "No starting location available. " +
+            "Provide 'from' or fromLat/fromLng, or set a location first with geo_set_location.",
+        };
+      }
     } else {
       start = {
         error:
-          "No starting location available. " +
-          "Provide 'from' or fromLat/fromLng, or set a location first with geo_set_location.",
+          "No starting location provided and no emulator connected. " +
+          "Provide 'from' or fromLat/fromLng, or connect an emulator first.",
       };
     }
 
@@ -503,6 +524,45 @@ server.registerTool("geo_get_status", { description: "Get current connection and
   }
   return text(lines.join("\n"));
 });
+
+// 9. geo_get_location
+server.registerTool(
+  "geo_get_location",
+  {
+    description:
+      "Get the emulator's current GPS location (last known position from the emulator's location providers). " +
+      "Useful as a starting point for a route when no mock location has been set yet. " +
+      "If the emulator has no recent GPS fix, the tool will fail — in that case, ask the user for their current location.",
+  },
+  async () => {
+    if (!isConnected()) {
+      return text(
+        "Emulator not connected. Call geo_connect_device first.\n" +
+          "If you need the starting location for a route, ask the user where they are.",
+      );
+    }
+    try {
+      const loc = getLocation();
+      if (loc) {
+        lastLocation = { lat: loc.lat, lng: loc.lng };
+        let msg = `Emulator location: ${loc.lat.toFixed(6)}, ${loc.lng.toFixed(6)}`;
+        if (loc.accuracy !== undefined && loc.accuracy > 0) {
+          msg += ` (accuracy: ${loc.accuracy.toFixed(1)}m)`;
+        }
+        return text(msg);
+      }
+      return text(
+        "Could not get emulator location: no recent GPS fix available.\n" +
+          "Ask the user for their current location or provide coordinates directly.",
+      );
+    } catch (err) {
+      return text(
+        `Failed to get emulator location: ${err instanceof Error ? err.message : String(err)}\n` +
+          "Ask the user for their current location or provide coordinates directly.",
+      );
+    }
+  },
+);
 
 // ── Start ───────────────────────────────────────────────────────────────────
 

@@ -1,6 +1,6 @@
 # MCP Server — android-mock-location-mcp
 
-MCP server that exposes 8 tools for controlling Android emulator GPS location. Sets mock locations via NMEA sentences (`adb emu geo nmea`) and supports geocoding and street-level routing through configurable providers.
+MCP server that exposes 9 tools for controlling Android emulator GPS location. Sets mock locations via NMEA sentences (`adb emu geo nmea`) and supports geocoding and street-level routing through configurable providers.
 
 See the [root README](../README.md) for project overview and quick start.
 
@@ -230,7 +230,7 @@ Simulate movement along a route between two points at a given speed. Routes foll
 
 Provide either `from`/`to` (place names) or `fromLat`/`fromLng`/`toLat`/`toLng` (coordinates) for each endpoint.
 
-**Starting location auto-resolve:** If no `from`/`fromLat`/`fromLng` is provided, the tool automatically uses the last mock location. If no location has been set yet, it returns an error asking the user for their starting location.
+**Starting location auto-resolve:** If no `from`/`fromLat`/`fromLng` is provided, the tool automatically tries (in order): the last mock location, the emulator's current GPS position via `geo_get_location`, or returns an error asking the user for their starting location.
 
 #### Routing Profiles
 
@@ -308,6 +308,16 @@ Get current connection and simulation status.
 
 No parameters.
 
+---
+
+### `geo_get_location`
+
+Get the emulator's current GPS location (last known position from the emulator's location providers). Reads the location via `adb shell dumpsys location`. Use this to determine where the emulator is before simulating a route.
+
+No parameters.
+
+Returns the emulator's latitude and longitude if a recent GPS fix is available, along with `accuracy` (horizontal accuracy in meters) when provided. If the emulator has no location fix, the tool returns an error message — in that case, ask the user for their current location.
+
 ## How It Works
 
 The server sets emulator GPS location using NMEA sentences via `adb emu geo nmea`. Two sentence types are used together:
@@ -321,7 +331,7 @@ This approach requires no agent app on the emulator — NMEA sentences are proce
 
 | File | Purpose |
 |------|---------|
-| `src/index.ts` | MCP server setup, all 8 tool definitions with Zod schemas |
+| `src/index.ts` | MCP server setup, all 9 tool definitions with Zod schemas |
 | `src/emulator.ts` | Emulator connection management, NMEA-based location setting via ADB |
 | `src/nmea.ts` | NMEA sentence generation (GPGGA + GPRMC with checksum) |
 | `src/adb.ts` | ADB command execution with timeouts, emulator validation |

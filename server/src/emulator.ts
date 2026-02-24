@@ -86,6 +86,95 @@ export function setLocation(params: NmeaLocationParams): void {
   }
 }
 
+// ── Location Query ───────────────────────────────────────────────────────────
+
+export interface EmulatorLocation {
+  lat: number;
+  lng: number;
+  accuracy?: number;
+}
+
+/**
+ * Parse a Location line from `dumpsys location` output.
+ *
+ * Android's Location.toString() format (API 26+):
+ *   Location[gps 37.421998,-122.084000 hAcc=20.0 ...]
+ *   Location[fused 37.421998,-122.084000 acc=5.0 ...]
+ *
+ * We extract lat, lng and optional accuracy (hAcc= or acc=).
+ */
+function parseLocationLine(line: string): EmulatorLocation | null {
+  // Match "Location[<provider> <lat>,<lng>" pattern
+  const coordMatch = line.match(/Location\[\S+\s+(-?[\d.]+),(-?[\d.]+)/);
+  if (!coordMatch) return null;
+
+  const lat = parseFloat(coordMatch[1]!);
+  const lng = parseFloat(coordMatch[2]!);
+  if (Number.isNaN(lat) || Number.isNaN(lng)) return null;
+
+  // Try to extract accuracy (hAcc= in newer Android, acc= in older)
+  const accMatch = line.match(/(?:hAcc|acc)=([\d.]+)/);
+  const accuracy = accMatch ? parseFloat(accMatch[1]!) : undefined;
+
+  return { lat, lng, accuracy };
+}
+
+/**
+ * Get the emulator's current GPS location via `adb shell dumpsys location`.
+ *
+ * Parses the "Last Known Locations" section from the location service dump
+ * and returns the GPS provider's last fix. Falls back to the fused provider
+ * if GPS is not available.
+ *
+ * Returns null if no location is available.
+ */
+export function getLocation(): EmulatorLocation | null {
+  if (!connectedDeviceId) {
+    throw new Error(
+      "Not connected to an emulator. Call geo_connect_device first.",
+    );
+  }
+
+  let output: string;
+  try {
+    output = adbDevice(connectedDeviceId, ["shell", "dumpsys", "location"]);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(`Failed to query emulator location: ${msg}`);
+  }
+
+  // Look for "Last Known Locations:" section and parse GPS/fused provider lines
+  const lines = output.split("\n");
+  let inLastKnown = false;
+  let gpsLocation: EmulatorLocation | null = null;
+  let fusedLocation: EmulatorLocation | null = null;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    if (trimmed.startsWith("Last Known Locations:")) {
+      inLastKnown = true;
+      continue;
+    }
+
+    // End of section: blank line or new section header (no leading whitespace)
+    if (inLastKnown && trimmed === "") {
+      break;
+    }
+
+    if (inLastKnown) {
+      if (trimmed.startsWith("gps:") || trimmed.includes("Location[gps")) {
+        gpsLocation = parseLocationLine(trimmed);
+      } else if (trimmed.startsWith("fused:") || trimmed.includes("Location[fused")) {
+        fusedLocation = parseLocationLine(trimmed);
+      }
+    }
+  }
+
+  // Prefer GPS, fall back to fused
+  return gpsLocation ?? fusedLocation ?? null;
+}
+
 /** Initialize emulator module. No-op — no background connections needed. */
 export function initEmulator(): void {
   // Nothing to do

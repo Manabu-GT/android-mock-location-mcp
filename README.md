@@ -120,6 +120,7 @@ The server will automatically detect the emulator and start setting locations.
 | `geo_test_geofence` | Test geofence entry/exit/bounce |
 | `geo_stop` | Stop any active simulation |
 | `geo_get_status` | Current mock location status |
+| `geo_get_location` | Get emulator's current GPS position (for use as route starting point) |
 | `geo_list_devices` | List connected Android emulators |
 | `geo_connect_device` | Connect to specific emulator |
 

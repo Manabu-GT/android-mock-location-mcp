@@ -116,7 +116,7 @@ Both `server/src/geocode.ts` and `server/src/routing.ts` use the same pattern:
 
 | Directory    | Description                                                                |
 |--------------|----------------------------------------------------------------------------|
-| `server/`    | MCP server — TypeScript/Node.js, exposes 8 location tools via MCP protocol |
+| `server/`    | MCP server — TypeScript/Node.js, exposes 9 location tools via MCP protocol |
 
 See [CLAUDE.md](CLAUDE.md) for detailed file-level structure and architecture notes.
 
