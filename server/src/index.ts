@@ -3,9 +3,12 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
+import { readFileSync } from "node:fs";
 import { geocodePlace } from "./geocode.js";
-import { haversineDistance } from "./geo-math.js";
-import { getRoute, interpolateAlongRoute, bearingAlongRoute } from "./routing.js";
+import { haversineDistance, computeBearing } from "./geo-math.js";
+import { getRoute, interpolateAlongRoute, bearingAlongRoute, buildCumulativeDistances } from "./routing.js";
+import type { RouteResult, RoutePoint } from "./routing.js";
+import { parseGpxKml } from "./gpx-kml.js";
 import { createRequire } from "node:module";
 import {
   setLocation,
@@ -45,6 +48,27 @@ const isOsmProvider = !process.env.PROVIDER || ["osm", "osrm"].includes(process.
 const geocodeHint = isOsmProvider
   ? " Prefer resolving place names to lat/lng coordinates yourself and passing them directly, as the default geocoder (Nominatim) is rate-limited. To resolve a place name: use WebSearch with `site:google.com/maps/place <place name>` to find an indexed Google Maps listing, then extract coordinates from the result URL — look for the `!3d<lat>!4d<lng>` parameters (e.g. `!3d40.0080766!4d-105.2342995`), or the `@lat,lng` segment (e.g. `@40.008,-105.234`). If no Maps result is found, pass the place name or address directly to the tool and let the server geocode it. If the server geocoder also fails, do ONE targeted web search for the address/place coordinates — do not perform multiple rounds of searching."
   : "";
+
+// ── Shared Helpers ──────────────────────────────────────────────────────────
+
+/** Resolve a place name or lat/lng pair to coordinates. */
+async function resolveEndpoint(
+  name?: string,
+  lat?: number,
+  lng?: number,
+  label?: string,
+): Promise<{ lat: number; lng: number } | { error: string }> {
+  if (name) {
+    const r = await geocodePlace(name);
+    if (!r)
+      return {
+        error: `Could not geocode "${name}" for ${label}. Try a more specific name or use ${label}Lat/${label}Lng.`,
+      };
+    return { lat: r.lat, lng: r.lng };
+  }
+  if (lat !== undefined && lng !== undefined) return { lat, lng };
+  return { error: `Provide '${label}' place name or ${label}Lat/${label}Lng coordinates` };
+}
 
 // ── MCP Server ──────────────────────────────────────────────────────────────
 
@@ -182,24 +206,6 @@ server.registerTool(
     },
   },
   async ({ from, to, fromLat, fromLng, toLat, toLng, speedKmh, trafficMultiplier, profile }) => {
-    const resolveEndpoint = async (
-      name?: string,
-      lat?: number,
-      lng?: number,
-      label?: string,
-    ): Promise<{ lat: number; lng: number } | { error: string }> => {
-      if (name) {
-        const r = await geocodePlace(name);
-        if (!r)
-          return {
-            error: `Could not geocode "${name}" for ${label}. Try a more specific name or use ${label}Lat/${label}Lng.`,
-          };
-        return { lat: r.lat, lng: r.lng };
-      }
-      if (lat !== undefined && lng !== undefined) return { lat, lng };
-      return { error: `Provide '${label}' place name or ${label}Lat/${label}Lng coordinates` };
-    };
-
     // Resolve start: explicit args → last mock position → emulator GPS → error
     let start: { lat: number; lng: number } | { error: string };
     if (from || (fromLat !== undefined && fromLng !== undefined)) {
@@ -315,7 +321,234 @@ server.registerTool(
   },
 );
 
-// 5. geo_simulate_jitter
+// 5. geo_simulate_multi_stop
+server.registerTool(
+  "geo_simulate_multi_stop",
+  {
+    description:
+      "Simulate movement along a multi-stop route (e.g. delivery route, rideshare pickups). " +
+      "Routes between consecutive waypoints follow real streets. Each waypoint can have a dwell time " +
+      "(time spent stationary at the stop before continuing). Runs as one continuous 1 Hz simulation " +
+      "with no gaps between legs. " +
+      "If the first waypoint is omitted (no lat/lng/place), automatically uses the current mock location." + geocodeHint,
+    inputSchema: {
+      waypoints: z
+        .array(
+          z.object({
+            lat: z.number().optional().describe("Waypoint latitude"),
+            lng: z.number().optional().describe("Waypoint longitude"),
+            place: z.string().optional().describe("Waypoint place name or address"),
+            dwellSeconds: z.number().default(0).describe("Time to stay at this waypoint before continuing (seconds)"),
+          }),
+        )
+        .min(2)
+        .describe("Ordered list of waypoints (min 2). Provide either 'place' or both 'lat'/'lng' per waypoint."),
+      speedKmh: z.number().default(60).describe("Travel speed in km/h between waypoints"),
+      trafficMultiplier: z.number().default(1.0).describe("Traffic slowdown factor (e.g. 1.5 = 50% slower)"),
+      profile: z
+        .enum(["car", "foot", "bike"])
+        .default("car")
+        .describe("Routing profile. Use 'foot' for walking, 'bike' for cycling, 'car' for driving."),
+    },
+  },
+  async ({ waypoints, speedKmh, trafficMultiplier, profile }) => {
+    // ── Resolve all waypoints ──────────────────────────────────────────────
+    const resolved: { lat: number; lng: number }[] = [];
+
+    for (let i = 0; i < waypoints.length; i++) {
+      const wp = waypoints[i]!;
+      const hasExplicit = wp.place || (wp.lat !== undefined && wp.lng !== undefined);
+
+      if (i === 0 && !hasExplicit) {
+        // First waypoint: auto-resolve from lastLocation / emulator GPS
+        if (lastLocation !== null) {
+          resolved.push({ lat: lastLocation.lat, lng: lastLocation.lng });
+        } else if (isConnected()) {
+          try {
+            const loc = getLocation();
+            if (loc) {
+              resolved.push({ lat: loc.lat, lng: loc.lng });
+            } else {
+              return text(
+                "No starting location available. The emulator has no recent GPS fix. " +
+                  "Provide lat/lng or place for the first waypoint, or set a location first with geo_set_location.",
+              );
+            }
+          } catch {
+            return text(
+              "No starting location available. " +
+                "Provide lat/lng or place for the first waypoint, or set a location first with geo_set_location.",
+            );
+          }
+        } else {
+          return text(
+            "No starting location provided and no emulator connected. " +
+              "Provide lat/lng or place for the first waypoint, or connect an emulator first.",
+          );
+        }
+        continue;
+      }
+
+      const result = await resolveEndpoint(wp.place, wp.lat, wp.lng, `waypoint[${i}]`);
+      if ("error" in result) return text(result.error);
+      resolved.push(result);
+    }
+
+    // ── Fetch routes for each leg ──────────────────────────────────────────
+    const effectiveSpeedMs = (speedKmh / trafficMultiplier) * (1000 / 3600);
+    const legs: { route: RouteResult; durationSec: number }[] = [];
+
+    for (let i = 0; i < resolved.length - 1; i++) {
+      const from = resolved[i]!;
+      const to = resolved[i + 1]!;
+      const route = await getRoute(from.lat, from.lng, to.lat, to.lng, profile);
+      const durationSec = Math.max(1, Math.round(route.distanceMeters / effectiveSpeedMs));
+      legs.push({ route, durationSec });
+    }
+
+    // ── Build phase plan ───────────────────────────────────────────────────
+    type Phase =
+      | { type: "move"; route: RouteResult; startTick: number; endTick: number }
+      | { type: "dwell"; position: RoutePoint; startTick: number; endTick: number };
+
+    const phases: Phase[] = [];
+    let tick = 0;
+
+    for (let i = 0; i < legs.length; i++) {
+      const leg = legs[i]!;
+
+      // Move phase
+      phases.push({
+        type: "move",
+        route: leg.route,
+        startTick: tick,
+        endTick: tick + leg.durationSec,
+      });
+      tick += leg.durationSec;
+
+      // Dwell phase at destination (waypoints[i+1])
+      const dwellSec = waypoints[i + 1]!.dwellSeconds;
+      if (dwellSec > 0) {
+        const endPoint = leg.route.points[leg.route.points.length - 1]!;
+        phases.push({
+          type: "dwell",
+          position: endPoint,
+          startTick: tick,
+          endTick: tick + dwellSec,
+        });
+        tick += dwellSec;
+      }
+    }
+
+    const totalTicks = tick;
+
+    // ── Start simulation ───────────────────────────────────────────────────
+    stopSimulation();
+    let currentTick = 0;
+
+    // Send starting position immediately
+    const firstPoint = legs[0]!.route.points[0]!;
+    try {
+      setLocation({
+        lat: firstPoint.lat,
+        lng: firstPoint.lng,
+        accuracy: 3,
+        altitude: 0,
+        speed: 0,
+        bearing: bearingAlongRoute(legs[0]!.route, 0),
+      });
+    } catch {
+      // Continue — simulation interval will retry
+    }
+    lastLocation = { lat: firstPoint.lat, lng: firstPoint.lng };
+
+    simulationTimer = setInterval(() => {
+      currentTick++;
+      if (currentTick >= totalTicks) {
+        // Send final position
+        const lastLeg = legs[legs.length - 1]!;
+        const finalPoint = lastLeg.route.points[lastLeg.route.points.length - 1]!;
+        try {
+          setLocation({
+            lat: finalPoint.lat,
+            lng: finalPoint.lng,
+            accuracy: 3,
+            altitude: 0,
+            speed: 0,
+            bearing: 0,
+          });
+          lastLocation = { lat: finalPoint.lat, lng: finalPoint.lng };
+        } catch {
+          // ignore
+        }
+        stopSimulation();
+        return;
+      }
+
+      // Find current phase
+      const phase = phases.find((p) => currentTick >= p.startTick && currentTick < p.endTick);
+      if (!phase) return;
+
+      try {
+        if (phase.type === "move") {
+          const phaseDuration = phase.endTick - phase.startTick;
+          const frac = (currentTick - phase.startTick) / phaseDuration;
+          const pos = interpolateAlongRoute(phase.route, frac);
+          const bearing = bearingAlongRoute(phase.route, frac);
+          setLocation({
+            lat: pos.lat,
+            lng: pos.lng,
+            accuracy: 3,
+            altitude: 0,
+            speed: effectiveSpeedMs,
+            bearing,
+          });
+          lastLocation = { lat: pos.lat, lng: pos.lng };
+        } else {
+          // dwell
+          setLocation({
+            lat: phase.position.lat,
+            lng: phase.position.lng,
+            accuracy: 3,
+            altitude: 0,
+            speed: 0,
+            bearing: 0,
+          });
+          lastLocation = { lat: phase.position.lat, lng: phase.position.lng };
+        }
+      } catch {
+        // ignore — emulator may have disconnected
+      }
+    }, 1000);
+
+    // ── Return summary ─────────────────────────────────────────────────────
+    let totalDistM = 0;
+    const legSummaries: string[] = [];
+    for (let i = 0; i < legs.length; i++) {
+      const leg = legs[i]!;
+      totalDistM += leg.route.distanceMeters;
+      const distKm = (leg.route.distanceMeters / 1000).toFixed(1);
+      const etaMin = (leg.durationSec / 60).toFixed(1);
+      const dwellSec = waypoints[i + 1]!.dwellSeconds;
+      const dwellStr = dwellSec > 0 ? ` + ${dwellSec}s dwell` : "";
+      legSummaries.push(`  Leg ${i + 1}: ${distKm} km, ${etaMin} min${dwellStr}`);
+    }
+
+    const routeSource = legs[0]!.route.source === "straight-line"
+      ? "straight-line (fallback)"
+      : `${legs[0]!.route.source}, profile: ${profile}`;
+
+    return text(
+      `Multi-stop simulation started.\n` +
+        `  Waypoints: ${resolved.length} (${legs.length} legs)\n` +
+        `  Routing: ${routeSource}\n` +
+        legSummaries.join("\n") + "\n" +
+        `  Total: ${(totalDistM / 1000).toFixed(1)} km, ${(totalTicks / 60).toFixed(1)} min (${totalTicks} steps at 1 Hz)`,
+    );
+  },
+);
+
+// 6. geo_simulate_jitter
 server.registerTool(
   "geo_simulate_jitter",
   {
@@ -417,7 +650,7 @@ server.registerTool(
   },
 );
 
-// 6. geo_test_geofence
+// 7. geo_test_geofence
 server.registerTool(
   "geo_test_geofence",
   {
@@ -508,13 +741,290 @@ server.registerTool(
   },
 );
 
-// 7. geo_stop
+// 8. geo_replay_gpx_kml
+server.registerTool(
+  "geo_replay_gpx_kml",
+  {
+    description:
+      "Replay a GPX or KML track file on the emulator. Supports two modes: " +
+      "(1) time-based replay for GPX files with timestamps — preserves the original speed profile, " +
+      "adjustable with speedMultiplier; " +
+      "(2) distance-based replay at constant speed for KML files or GPX without timestamps. " +
+      "Auto-detects format from XML content. Provide either the file content as a string " +
+      "or an absolute file path on the host machine.",
+    inputSchema: {
+      fileContent: z.string().optional().describe("Raw GPX or KML file content (XML string)"),
+      filePath: z.string().optional().describe("Absolute path to a GPX or KML file on the host"),
+      speedMultiplier: z
+        .number()
+        .default(1.0)
+        .describe("Playback speed multiplier for time-based replay (2.0 = 2x faster). Only used when file has timestamps."),
+      speedKmh: z
+        .number()
+        .default(60)
+        .describe("Travel speed for distance-based replay (km/h). Only used when file has no timestamps."),
+    },
+  },
+  async ({ fileContent, filePath, speedMultiplier, speedKmh }) => {
+    // ── Read file content ────────────────────────────────────────────────
+    let content: string;
+    if (fileContent) {
+      content = fileContent;
+    } else if (filePath) {
+      try {
+        content = readFileSync(filePath, "utf-8");
+      } catch (err) {
+        return text(`Failed to read file "${filePath}": ${err instanceof Error ? err.message : String(err)}`);
+      }
+    } else {
+      return text("Provide either 'fileContent' (XML string) or 'filePath' (absolute path to file).");
+    }
+
+    // ── Parse ────────────────────────────────────────────────────────────
+    let track: ReturnType<typeof parseGpxKml>;
+    try {
+      track = parseGpxKml(content);
+    } catch (err) {
+      return text(`Failed to parse file: ${err instanceof Error ? err.message : String(err)}`);
+    }
+
+    // ── Single point: just set location ──────────────────────────────────
+    if (track.points.length === 1) {
+      const pt = track.points[0]!;
+      try {
+        setLocation({
+          lat: pt.lat,
+          lng: pt.lng,
+          accuracy: 3,
+          altitude: pt.elevation ?? 0,
+          speed: 0,
+          bearing: 0,
+        });
+        lastLocation = { lat: pt.lat, lng: pt.lng };
+        return text(
+          `${track.format.toUpperCase()} file contains 1 point. Location set to ${pt.lat.toFixed(6)}, ${pt.lng.toFixed(6)}.`,
+        );
+      } catch (err) {
+        return text(`Error: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+
+    // ── Compute total distance ───────────────────────────────────────────
+    let totalDistM = 0;
+    for (let i = 1; i < track.points.length; i++) {
+      totalDistM += haversineDistance(
+        track.points[i - 1]!.lat, track.points[i - 1]!.lng,
+        track.points[i]!.lat, track.points[i]!.lng,
+      );
+    }
+
+    stopSimulation();
+
+    if (track.hasTimestamps) {
+      // ── Time-based replay ────────────────────────────────────────────
+      const points = track.points;
+      const firstTime = points[0]!.timestamp!.getTime();
+      const lastTime = points[points.length - 1]!.timestamp!.getTime();
+      const originalDurationMs = lastTime - firstTime;
+
+      if (originalDurationMs <= 0) {
+        // All timestamps identical — fall through to distance-based
+        return replayDistanceBased(track, totalDistM, speedKmh);
+      }
+
+      const totalSeconds = Math.max(1, Math.round(originalDurationMs / (1000 * speedMultiplier)));
+      let currentTick = 0;
+
+      // Send starting position immediately
+      const startPt = points[0]!;
+      try {
+        setLocation({
+          lat: startPt.lat,
+          lng: startPt.lng,
+          accuracy: 3,
+          altitude: startPt.elevation ?? 0,
+          speed: 0,
+          bearing: points.length >= 2 ? computeBearing(startPt.lat, startPt.lng, points[1]!.lat, points[1]!.lng) : 0,
+        });
+      } catch {
+        // Continue
+      }
+      lastLocation = { lat: startPt.lat, lng: startPt.lng };
+
+      simulationTimer = setInterval(() => {
+        currentTick++;
+        if (currentTick >= totalSeconds) {
+          const endPt = points[points.length - 1]!;
+          try {
+            setLocation({
+              lat: endPt.lat,
+              lng: endPt.lng,
+              accuracy: 3,
+              altitude: endPt.elevation ?? 0,
+              speed: 0,
+              bearing: 0,
+            });
+            lastLocation = { lat: endPt.lat, lng: endPt.lng };
+          } catch {
+            // ignore
+          }
+          stopSimulation();
+          return;
+        }
+
+        // Map current tick to position in original timeline
+        const playbackTimeMs = currentTick * 1000 * speedMultiplier;
+        const targetTime = firstTime + playbackTimeMs;
+
+        // Binary search for surrounding trackpoints
+        let lo = 0;
+        let hi = points.length - 1;
+        while (lo < hi - 1) {
+          const mid = (lo + hi) >> 1;
+          if (points[mid]!.timestamp!.getTime() <= targetTime) {
+            lo = mid;
+          } else {
+            hi = mid;
+          }
+        }
+
+        const p1 = points[lo]!;
+        const p2 = points[hi]!;
+        const t1 = p1.timestamp!.getTime();
+        const t2 = p2.timestamp!.getTime();
+        const segDuration = t2 - t1;
+        const segFrac = segDuration > 0 ? (targetTime - t1) / segDuration : 0;
+
+        const lat = p1.lat + (p2.lat - p1.lat) * segFrac;
+        const lng = p1.lng + (p2.lng - p1.lng) * segFrac;
+        const elevation =
+          p1.elevation !== undefined && p2.elevation !== undefined
+            ? p1.elevation + (p2.elevation - p1.elevation) * segFrac
+            : (p1.elevation ?? p2.elevation ?? 0);
+
+        const dist = haversineDistance(p1.lat, p1.lng, p2.lat, p2.lng);
+        const speedMs = segDuration > 0 ? (dist / segDuration) * 1000 : 0;
+        const bearing = computeBearing(p1.lat, p1.lng, p2.lat, p2.lng);
+
+        try {
+          setLocation({
+            lat,
+            lng,
+            accuracy: 3,
+            altitude: elevation,
+            speed: speedMs,
+            bearing,
+          });
+          lastLocation = { lat, lng };
+        } catch {
+          // ignore
+        }
+      }, 1000);
+
+      const origMin = (originalDurationMs / 60_000).toFixed(1);
+      const playMin = (totalSeconds / 60).toFixed(1);
+      return text(
+        `GPX replay started (time-based).\n` +
+          `  Track: ${points.length} points, ${(totalDistM / 1000).toFixed(1)} km` +
+          (track.name ? ` — "${track.name}"` : "") + "\n" +
+          `  Original duration: ${origMin} min\n` +
+          `  Playback: ${speedMultiplier}x speed → ${playMin} min (${totalSeconds} steps at 1 Hz)`,
+      );
+    }
+
+    // ── Distance-based replay (no timestamps) ────────────────────────────
+    return replayDistanceBased(track, totalDistM, speedKmh);
+
+    function replayDistanceBased(
+      t: ReturnType<typeof parseGpxKml>,
+      distM: number,
+      speed: number,
+    ) {
+      const routePoints: RoutePoint[] = t.points.map((p) => ({ lat: p.lat, lng: p.lng }));
+      const cumulativeDistances = buildCumulativeDistances(routePoints);
+      const route: RouteResult = {
+        points: routePoints,
+        distanceMeters: cumulativeDistances[cumulativeDistances.length - 1]!,
+        cumulativeDistances,
+        source: "file",
+      };
+
+      const effectiveSpeedMs = speed * (1000 / 3600);
+      const totalSeconds = Math.max(1, Math.round(route.distanceMeters / effectiveSpeedMs));
+      let step = 0;
+
+      // Send starting position immediately
+      const startPt = route.points[0]!;
+      try {
+        setLocation({
+          lat: startPt.lat,
+          lng: startPt.lng,
+          accuracy: 3,
+          altitude: t.points[0]!.elevation ?? 0,
+          speed: 0,
+          bearing: bearingAlongRoute(route, 0),
+        });
+      } catch {
+        // Continue
+      }
+      lastLocation = { lat: startPt.lat, lng: startPt.lng };
+
+      simulationTimer = setInterval(() => {
+        step++;
+        if (step > totalSeconds) {
+          const endPt = route.points[route.points.length - 1]!;
+          try {
+            setLocation({
+              lat: endPt.lat,
+              lng: endPt.lng,
+              accuracy: 3,
+              altitude: t.points[t.points.length - 1]!.elevation ?? 0,
+              speed: 0,
+              bearing: 0,
+            });
+            lastLocation = { lat: endPt.lat, lng: endPt.lng };
+          } catch {
+            // ignore
+          }
+          stopSimulation();
+          return;
+        }
+        const frac = step / totalSeconds;
+        const pos = interpolateAlongRoute(route, frac);
+        const bearing = bearingAlongRoute(route, frac);
+        try {
+          setLocation({
+            lat: pos.lat,
+            lng: pos.lng,
+            accuracy: 3,
+            altitude: 0,
+            speed: effectiveSpeedMs,
+            bearing,
+          });
+          lastLocation = { lat: pos.lat, lng: pos.lng };
+        } catch {
+          // ignore
+        }
+      }, 1000);
+
+      const mode = t.format === "gpx" ? "distance-based (no timestamps)" : "distance-based";
+      return text(
+        `${t.format.toUpperCase()} replay started (${mode}).\n` +
+          `  Track: ${t.points.length} points, ${(distM / 1000).toFixed(1)} km` +
+          (t.name ? ` — "${t.name}"` : "") + "\n" +
+          `  Speed: ${speed.toFixed(1)} km/h → ${(totalSeconds / 60).toFixed(1)} min (${totalSeconds} steps at 1 Hz)`,
+      );
+    }
+  },
+);
+
+// 9. geo_stop
 server.registerTool("geo_stop", { description: "Stop any active location simulation" }, async () => {
   stopSimulation();
   return text("Simulation stopped.");
 });
 
-// 8. geo_get_status
+// 10. geo_get_status
 server.registerTool("geo_get_status", { description: "Get current connection and simulation status" }, async () => {
   const lines: string[] = [];
   lines.push(`Emulator: ${getConnectedDeviceId() ?? "not connected"}`);
@@ -525,7 +1035,7 @@ server.registerTool("geo_get_status", { description: "Get current connection and
   return text(lines.join("\n"));
 });
 
-// 9. geo_get_location
+// 11. geo_get_location
 server.registerTool(
   "geo_get_location",
   {

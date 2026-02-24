@@ -20,12 +20,13 @@ adb devices  # should show emulator-5554 or similar
 
 ```
 server/src/
-  index.ts          # MCP server, all 9 tool definitions (Zod schemas)
+  index.ts          # MCP server, all 11 tool definitions (Zod schemas)
   emulator.ts       # Emulator connection management, NMEA-based location setting via ADB
   nmea.ts           # NMEA sentence generation (GPGGA + GPRMC with checksum)
   adb.ts            # ADB command execution with timeouts, emulator validation
   geocode.ts        # Geocoding providers (Nominatim/Google/Mapbox)
   routing.ts        # Routing providers (OSRM/Google/Mapbox)
+  gpx-kml.ts        # GPX/KML file parsing for track replay
   geo-math.ts       # Haversine distance, bearing calculation
   fetch-utils.ts    # Shared fetch with timeout helper
 ```

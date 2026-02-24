@@ -1,6 +1,6 @@
 # MCP Server — android-mock-location-mcp
 
-MCP server that exposes 9 tools for controlling Android emulator GPS location. Sets mock locations via NMEA sentences (`adb emu geo nmea`) and supports geocoding and street-level routing through configurable providers.
+MCP server that exposes 11 tools for controlling Android emulator GPS location. Sets mock locations via NMEA sentences (`adb emu geo nmea`) and supports geocoding and street-level routing through configurable providers.
 
 See the [root README](../README.md) for project overview and quick start.
 
@@ -244,6 +244,30 @@ The AI should select `profile` based on user intent (e.g. "walk to" → `foot`, 
 
 ---
 
+### `geo_simulate_multi_stop`
+
+Simulate movement along a multi-stop route (e.g. delivery route, rideshare pickups). Routes between consecutive waypoints follow real streets. Each waypoint can have a dwell time (time spent stationary at the stop before continuing). Runs as one continuous 1 Hz simulation with no gaps between legs.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `waypoints` | array | yes | — | Ordered list of waypoints (min 2). Each: `{ lat?, lng?, place?, dwellSeconds? }` |
+| `speedKmh` | number | no | `60` | Travel speed between waypoints (km/h) |
+| `trafficMultiplier` | number | no | `1.0` | Traffic slowdown factor (e.g. `1.5` = 50% slower) |
+| `profile` | enum | no | `car` | Routing profile: `car`, `foot`, or `bike` |
+
+Each waypoint object:
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `lat` | number | no | — | Waypoint latitude |
+| `lng` | number | no | — | Waypoint longitude |
+| `place` | string | no | — | Waypoint place name or address |
+| `dwellSeconds` | number | no | `0` | Time to stay at this waypoint before continuing (seconds) |
+
+Provide either `place` or both `lat`/`lng` per waypoint. If the first waypoint has no coordinates or place, the tool auto-resolves from the current mock location or emulator GPS position.
+
+---
+
 ### `geo_simulate_jitter`
 
 Simulate GPS noise/jitter at a location for testing accuracy handling.
@@ -294,6 +318,32 @@ Provide either `place` or both `lat`/`lng`.
 
 ---
 
+### `geo_replay_gpx_kml`
+
+Replay a GPX or KML track file on the emulator. Auto-detects format from the XML content.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `fileContent` | string | no* | — | Raw GPX or KML file content (XML string) |
+| `filePath` | string | no* | — | Absolute path to a GPX or KML file on the host |
+| `speedMultiplier` | number | no | `1.0` | Playback speed multiplier for time-based replay (e.g. `2.0` = 2x faster) |
+| `speedKmh` | number | no | `60` | Travel speed for distance-based replay (km/h) |
+
+*Provide either `fileContent` or `filePath`.
+
+#### Replay Modes
+
+| Mode | When used | Speed control |
+|------|-----------|---------------|
+| Time-based | GPX files with timestamps on ≥80% of trackpoints | `speedMultiplier` — preserves original speed profile |
+| Distance-based | KML files, or GPX without timestamps | `speedKmh` — constant speed along the track |
+
+**GPX support:** Extracts `<trkpt>` elements from `<trk>/<trkseg>` with optional `<ele>` (elevation) and `<time>` (timestamp).
+
+**KML support:** Extracts `<coordinates>` from `<LineString>` elements. Coordinate format is `lng,lat,ele` tuples separated by whitespace.
+
+---
+
 ### `geo_stop`
 
 Stop any active location simulation.
@@ -331,12 +381,13 @@ This approach requires no agent app on the emulator — NMEA sentences are proce
 
 | File | Purpose |
 |------|---------|
-| `src/index.ts` | MCP server setup, all 9 tool definitions with Zod schemas |
+| `src/index.ts` | MCP server setup, all 11 tool definitions with Zod schemas |
 | `src/emulator.ts` | Emulator connection management, NMEA-based location setting via ADB |
 | `src/nmea.ts` | NMEA sentence generation (GPGGA + GPRMC with checksum) |
 | `src/adb.ts` | ADB command execution with timeouts, emulator validation |
 | `src/geocode.ts` | Geocoding providers: Nominatim, Google, Mapbox |
 | `src/routing.ts` | Routing providers: OSRM, Google Routes API, Mapbox Directions |
+| `src/gpx-kml.ts` | GPX/KML file parsing for track replay |
 | `src/geo-math.ts` | Haversine distance, forward bearing calculation |
 | `src/fetch-utils.ts` | Shared `fetchWithTimeout` helper |
 
