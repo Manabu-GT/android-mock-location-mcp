@@ -30,26 +30,6 @@ yarn.lock
 pnpm-lock.yaml
 
 # ==============================
-# Android / Gradle (android/)
-# ==============================
-android/build/
-android/app/build/
-android/.gradle/
-.gradle/
-android/local.properties
-
-# Signing
-*.jks
-*.keystore
-
-# APK / AAB outputs
-*.apk
-*.aab
-
-# Android profiling / captures
-*.hprof
-captures/
-# ==============================
 # AI Tool Configs
 # ==============================
 plans/

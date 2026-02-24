@@ -1,6 +1,6 @@
 # MCP Server — android-mock-location-mcp
 
-MCP server that exposes 9 tools for controlling Android device GPS location. Connects to an Android agent app over TCP (via ADB port forwarding) and supports geocoding and street-level routing through configurable providers.
+MCP server that exposes 9 tools for controlling Android emulator GPS location. Sets mock locations via NMEA sentences (`adb emu geo nmea`) and supports geocoding and street-level routing through configurable providers.
 
 See the [root README](../README.md) for project overview and quick start.
 
@@ -181,7 +181,7 @@ Google and Mapbox providers produce better results than the default OSM provider
 
 ### `geo_list_devices`
 
-List connected Android devices via ADB.
+List connected Android emulators via ADB.
 
 No parameters.
 
@@ -189,17 +189,17 @@ No parameters.
 
 ### `geo_connect_device`
 
-Connect to an Android device for mock location control. Automatically grants permissions, selects the app as mock location provider, starts the agent service, sets up ADB port forwarding, and opens a TCP socket.
+Connect to an Android emulator for mock location control. Only emulators are supported (e.g. `emulator-5554`). No agent app installation needed — locations are set via NMEA sentences.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `deviceId` | string | yes | Device serial from `geo_list_devices`, e.g. `emulator-5554` |
+| `deviceId` | string | yes | Emulator serial from `geo_list_devices`, e.g. `emulator-5554` |
 
 ---
 
 ### `geo_set_location`
 
-Set device GPS to coordinates or any place name/address. Geocodes place names via the configured provider.
+Set emulator GPS to coordinates or any place name/address. Geocodes place names via the configured provider.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -230,7 +230,7 @@ Simulate movement along a route between two points at a given speed. Routes foll
 
 Provide either `from`/`to` (place names) or `fromLat`/`fromLng`/`toLat`/`toLng` (coordinates) for each endpoint.
 
-**Starting location auto-resolve:** If no `from`/`fromLat`/`fromLng` is provided, the tool automatically tries (in order): the last mock location, the device's real GPS position via `geo_get_location`, or returns an error asking the user for their starting location.
+**Starting location auto-resolve:** If no `from`/`fromLat`/`fromLng` is provided, the tool automatically tries (in order): the last mock location, the emulator's current GPS position via `geo_get_location`, or returns an error asking the user for their starting location.
 
 #### Routing Profiles
 
@@ -312,19 +312,29 @@ No parameters.
 
 ### `geo_get_location`
 
-Get the device's current real GPS location (last known position from the device's location sensors). Use this to determine where the device physically is before simulating a route.
+Get the emulator's current GPS location (last known position from the emulator's location providers). Reads the location via `adb shell dumpsys location`. Use this to determine where the emulator is before simulating a route.
 
 No parameters.
 
-Returns the device's latitude and longitude if a recent GPS fix is available, along with `accuracy` (horizontal accuracy in meters) and `ageMs` (milliseconds since the fix was obtained) when provided by the device. If the device has no location fix, the tool returns an error message — in that case, ask the user for their current location.
+Returns the emulator's latitude and longitude if a recent GPS fix is available, along with `accuracy` (horizontal accuracy in meters) when provided. If the emulator has no location fix, the tool returns an error message — in that case, ask the user for their current location.
+
+## How It Works
+
+The server sets emulator GPS location using NMEA sentences via `adb emu geo nmea`. Two sentence types are used together:
+
+- **$GPGGA** — carries latitude, longitude, altitude, and HDOP (Horizontal Dilution of Precision, which Android uses to derive accuracy)
+- **$GPRMC** — carries latitude, longitude, speed over ground (in knots), and course/bearing
+
+This approach requires no agent app on the emulator — NMEA sentences are processed directly by the emulator's GPS simulation layer.
 
 ## Source Structure
 
 | File | Purpose |
 |------|---------|
 | `src/index.ts` | MCP server setup, all 9 tool definitions with Zod schemas |
-| `src/adb.ts` | ADB command execution with timeouts, device setup, agent install check |
-| `src/device.ts` | TCP socket to agent, connection state machine, request/response matching |
+| `src/emulator.ts` | Emulator connection management, NMEA-based location setting via ADB |
+| `src/nmea.ts` | NMEA sentence generation (GPGGA + GPRMC with checksum) |
+| `src/adb.ts` | ADB command execution with timeouts, emulator validation |
 | `src/geocode.ts` | Geocoding providers: Nominatim, Google, Mapbox |
 | `src/routing.ts` | Routing providers: OSRM, Google Routes API, Mapbox Directions |
 | `src/geo-math.ts` | Haversine distance, forward bearing calculation |
@@ -343,8 +353,10 @@ The server communicates via stdio (MCP protocol). To test interactively, use the
 
 ## Known Limitations
 
-- **Single device only.** The server connects to one Android device at a time. Calling `geo_connect_device` with a different serial disconnects the previous device and stops any active simulation. Controlling multiple devices simultaneously is not supported.
+- **Emulators only.** The server uses `adb emu geo nmea` which only works with Android emulators. Physical devices are not supported.
+- **Single emulator.** The server connects to one emulator at a time. Calling `geo_connect_device` with a different serial disconnects the previous one and stops any active simulation.
 - **Single simulation.** Only one simulation (route, jitter, or geofence) runs at a time. Starting a new one stops the previous.
+- **Accuracy is approximate.** GPS accuracy is conveyed via HDOP in the GPGGA sentence. Android derives accuracy from HDOP, so the resulting accuracy value may not exactly match the requested meters.
 
 See also: provider-specific limitations in the [Providers](#providers) table above.
 

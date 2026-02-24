@@ -1,12 +1,11 @@
 # android-mock-location-mcp
 
 [![Server CI](https://github.com/Manabu-GT/android-mock-location-mcp/actions/workflows/server-ci.yml/badge.svg)](https://github.com/Manabu-GT/android-mock-location-mcp/actions/workflows/server-ci.yml)
-[![Android CI](https://github.com/Manabu-GT/android-mock-location-mcp/actions/workflows/android-ci.yml/badge.svg)](https://github.com/Manabu-GT/android-mock-location-mcp/actions/workflows/android-ci.yml)
 [![npm version](https://img.shields.io/npm/v/android-mock-location-mcp)](https://www.npmjs.com/package/android-mock-location-mcp)
 ![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/Manabu-GT/android-mock-location-mcp?utm_source=oss&utm_medium=github&utm_campaign=Manabu-GT%2Fandroid-mock-location-mcp&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-**Mock Android device GPS from any MCP client.** Control your test device's location for QA testing with built-in geocoding and street-level routing.
+**Mock Android emulator GPS from any MCP client.** Control your emulator's location for QA testing with built-in geocoding and street-level routing.
 
 <img src="art/mcp_mock_location_demo.gif" alt="Demo">
 
@@ -19,13 +18,13 @@
 ## Why?
 
 Testing location-aware apps is painful. You either:
-- Physically walk around with a device
+- Manually type coordinates into the emulator's extended controls
 - Write complex ADB scripts with hardcoded coordinates
 - Use clunky GUI mock location apps
 
-This MCP server lets you control device location from Android Studio/Cursor/Claude Code/Codex..etc. Say "drive to the airport" instead of copy-pasting coordinates.
+This MCP server lets you control emulator location from Android Studio, Cursor, Claude Code, Codex, etc. Say "drive to the airport" instead of copy-pasting coordinates.
 
-This server **controls your Android device's GPS** with built-in geocoding and street-level routing. No extra tools needed.
+This server **controls your Android emulator's GPS** with built-in geocoding and street-level routing. No extra tools or agent apps needed — it sends NMEA sentences directly to the emulator via ADB.
 
 ## Architecture
 
@@ -36,17 +35,14 @@ This server **controls your Android device's GPS** with built-in geocoding and s
 │  │ Claude/Cursor │ ←──→ │ MCP Server                  │ │
 │  │ or any MCP    │      │ • Geocoding + routing       │ │
 │  │ client        │      │ • Route interpolation       │ │
-│  └───────────────┘      └──────────┬──────────────────┘ │
+│  └───────────────┘      │ • NMEA sentence generation  │ │
+│                          └──────────┬──────────────────┘ │
 └────────────────────────────────────┼────────────────────┘
-                                     │ adb forward tcp:5005
+                                     │ adb emu geo nmea
                                      ▼
 ┌─────────────────────────────────────────────────────────┐
-│  Android Device / Emulator                              │
-│  ┌─────────────────────────────────────────────────┐    │
-│  │ Mock Location Agent                             │    │
-│  │ • Mock location provider                        │    │
-│  │ • Socket listener (port 5005)                   │    │
-│  └─────────────────────────────────────────────────┘    │
+│  Android Emulator                                       │
+│  GPS location set via NMEA (GPGGA + GPRMC)              │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -99,24 +95,11 @@ Restart your MCP client after updating the config for changes to take effect.
 
 For provider options (Google, Mapbox), see [Server Configuration](server/README.md#configuration).
 
-### 2. Install the Android Agent
+### 2. Start an Emulator
 
-Download the latest APK from [Releases](https://github.com/Manabu-GT/android-mock-location-mcp/releases/tag/android-v0.2.0) and install:
-```bash
-adb install -r android-mock-location-mcp-agent.apk
-```
+Start an Android emulator from Android Studio or the command line. No special setup is needed — the server communicates directly via NMEA sentences.
 
-To build from source, see [android/README.md](android/README.md#build-and-install).
-
-### 3. Enable Developer Options
-
-Enable **Developer Options** on your device (Settings → About Phone → tap Build Number 7 times) and turn on **USB Debugging**.
-
-That's it — the server automatically configures mock location permissions, starts the agent service, and sets up port forwarding when you first use a location tool.
-
-See [android/README.md](android/README.md) for manual setup and troubleshooting.
-
-### 4. Use It
+### 3. Use It
 
 In your MCP client:
 
@@ -124,6 +107,8 @@ In your MCP client:
 > Set location to Times Square New York with 50m accuracy
 > Drive from here to SFO airport at 60 km/h
 ```
+
+The server will automatically detect the emulator and start setting locations.
 
 ## Available Tools
 
@@ -135,9 +120,9 @@ In your MCP client:
 | `geo_test_geofence` | Test geofence entry/exit/bounce |
 | `geo_stop` | Stop any active simulation |
 | `geo_get_status` | Current mock location status |
-| `geo_get_location` | Get device's real GPS position (for use as route starting point) |
-| `geo_list_devices` | List connected Android devices |
-| `geo_connect_device` | Connect to specific device |
+| `geo_get_location` | Get emulator's current GPS position (for use as route starting point) |
+| `geo_list_devices` | List connected Android emulators |
+| `geo_connect_device` | Connect to specific emulator |
 
 For full parameter reference, see [server/README.md](server/README.md#tool-reference).
 
@@ -176,14 +161,12 @@ For env vars, MCP client config examples, and provider details, see [server/READ
 | Document | Description |
 |----------|-------------|
 | [Server README](./server/README.md) | Tool reference, provider configuration, development |
-| [Android README](./android/README.md) | Build instructions, device setup, troubleshooting |
-| [Protocol Spec](./protocol/PROTOCOL.md) | JSON command format |
 | [Publishing](./PUBLISHING.md) | npm publish and release workflow |
 | [Contributing](./CONTRIBUTING.md) | Development setup |
 
 ## Complementary Tools
 
-This server focuses on device location control. For other needs:
+This server focuses on emulator location control. For other needs:
 - [mobile-mcp](https://github.com/mobile-next/mobile-mcp) — Cross-platform (iOS + Android) mobile UI automation
 - [Android-MCP](https://github.com/CursorTouch/Android-MCP) — Lightweight Android device control via ADB + Accessibility API
 
