@@ -116,8 +116,10 @@ The server will automatically detect the emulator and start setting locations.
 |------|-------------|
 | `geo_set_location` | Set to coordinates or place name |
 | `geo_simulate_route` | Move along a route at specified speed (supports car/foot/bike profiles) |
+| `geo_simulate_multi_stop` | Multi-stop route with dwell times (e.g. delivery routes) |
 | `geo_simulate_jitter` | Simulate GPS noise (urban canyon, drift) |
 | `geo_test_geofence` | Test geofence entry/exit/bounce |
+| `geo_replay_gpx_kml` | Replay a GPX or KML track file |
 | `geo_stop` | Stop any active simulation |
 | `geo_get_status` | Current mock location status |
 | `geo_get_location` | Get emulator's current GPS position (for use as route starting point) |
@@ -148,6 +150,12 @@ For env vars, MCP client config examples, and provider details, see [server/READ
 # Route simulation
 "Drive from SFO to downtown SF, simulate a commute with heavy traffic"
 "Walk to the nearest Whole Foods"
+
+# Multi-stop routes
+"Simulate a delivery route: warehouse → Stop A (wait 30s) → Stop B (wait 30s) → depot"
+
+# Track replay
+"Replay this GPX file from my morning run at 2x speed"
 
 # GPS testing
 "Simulate bad GPS for 30 seconds, add urban canyon jitter with 50m radius"
