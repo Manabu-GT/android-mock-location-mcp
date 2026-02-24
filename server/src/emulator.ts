@@ -53,7 +53,7 @@ export function connectEmulator(deviceId: string): void {
 }
 
 /** Disconnect from the current emulator. */
-export function disconnectEmulator(): void {
+function disconnectEmulator(): void {
   const wasConnected = connectedDeviceId !== null;
   connectedDeviceId = null;
   if (wasConnected) {
