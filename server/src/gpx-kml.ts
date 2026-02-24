@@ -124,7 +124,7 @@ function findLineStrings(node: unknown): KmlNode[] {
     }
   }
   // Recurse into known container elements
-  for (const key of ["Document", "Folder", "Placemark"]) {
+  for (const key of ["Document", "Folder", "Placemark", "MultiGeometry"]) {
     if (key in obj) {
       for (const child of asArray(obj[key])) {
         results.push(...findLineStrings(child));

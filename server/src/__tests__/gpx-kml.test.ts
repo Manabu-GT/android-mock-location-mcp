@@ -231,6 +231,20 @@ describe("parseGpxKml — KML", () => {
     const kml = `<?xml version="1.0"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document></Document></kml>`;
     expect(() => parseGpxKml(kml)).toThrow("no <LineString>");
   });
+
+  test("finds LineString inside MultiGeometry", () => {
+    const kml = `<?xml version="1.0"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document><Placemark><MultiGeometry>
+    <LineString><coordinates>1.0,10.0 2.0,20.0 3.0,30.0</coordinates></LineString>
+  </MultiGeometry></Placemark></Document>
+</kml>`;
+
+    const result = parseGpxKml(kml);
+    expect(result.points).toHaveLength(3);
+    expect(result.points[0]!.lng).toBeCloseTo(1.0);
+    expect(result.points[0]!.lat).toBeCloseTo(10.0);
+  });
 });
 
 // ── Format detection & error handling ────────────────────────────────────────

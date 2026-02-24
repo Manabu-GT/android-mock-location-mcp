@@ -445,6 +445,7 @@ server.registerTool(
     // ── Start simulation ───────────────────────────────────────────────────
     stopSimulation();
     let currentTick = 0;
+    let phaseIdx = 0;
 
     // Send starting position immediately
     const firstPoint = legs[0]!.route.points[0]!;
@@ -485,9 +486,12 @@ server.registerTool(
         return;
       }
 
-      // Find current phase
-      const phase = phases.find((p) => currentTick >= p.startTick && currentTick < p.endTick);
-      if (!phase) return;
+      // Advance phase index if needed (O(1) amortized)
+      while (phaseIdx < phases.length - 1 && currentTick >= phases[phaseIdx]!.endTick) {
+        phaseIdx++;
+      }
+      const phase = phases[phaseIdx];
+      if (!phase || currentTick < phase.startTick || currentTick >= phase.endTick) return;
 
       try {
         if (phase.type === "move") {
@@ -766,6 +770,14 @@ server.registerTool(
     },
   },
   async ({ fileContent, filePath, speedMultiplier, speedKmh }) => {
+    // ── Validate speed parameters ────────────────────────────────────────
+    if (speedMultiplier <= 0) {
+      return text("speedMultiplier must be greater than 0.");
+    }
+    if (speedKmh <= 0) {
+      return text("speedKmh must be greater than 0.");
+    }
+
     // ── Read file content ────────────────────────────────────────────────
     let content: string;
     if (fileContent) {
@@ -822,7 +834,11 @@ server.registerTool(
 
     if (track.hasTimestamps) {
       // ── Time-based replay ────────────────────────────────────────────
-      const points = track.points;
+      // Filter to only points with valid timestamps (hasTimestamps guarantees ≥80%)
+      const points = track.points.filter((p) => p.timestamp !== undefined);
+      if (points.length < 2) {
+        return replayDistanceBased(track, totalDistM, speedKmh);
+      }
       const firstTime = points[0]!.timestamp!.getTime();
       const lastTime = points[points.length - 1]!.timestamp!.getTime();
       const originalDurationMs = lastTime - firstTime;
@@ -941,6 +957,7 @@ server.registerTool(
       speed: number,
     ) {
       const routePoints: RoutePoint[] = t.points.map((p) => ({ lat: p.lat, lng: p.lng }));
+      const elevations = t.points.map((p) => p.elevation ?? 0);
       const cumulativeDistances = buildCumulativeDistances(routePoints);
       const route: RouteResult = {
         points: routePoints,
@@ -953,6 +970,24 @@ server.registerTool(
       const totalSeconds = Math.max(1, Math.round(route.distanceMeters / effectiveSpeedMs));
       let step = 0;
 
+      /** Interpolate elevation along the track at the given progress fraction. */
+      function elevationAtFraction(frac: number): number {
+        if (frac <= 0) return elevations[0]!;
+        if (frac >= 1) return elevations[elevations.length - 1]!;
+        const targetDist = frac * route.distanceMeters;
+        let i = 0;
+        while (i < cumulativeDistances.length - 1 && cumulativeDistances[i + 1]! <= targetDist) {
+          i++;
+        }
+        if (i >= elevations.length - 1) return elevations[elevations.length - 1]!;
+        const segStart = cumulativeDistances[i]!;
+        const segEnd = cumulativeDistances[i + 1]!;
+        const segLen = segEnd - segStart;
+        if (segLen === 0) return elevations[i]!;
+        const segFrac = (targetDist - segStart) / segLen;
+        return elevations[i]! + (elevations[i + 1]! - elevations[i]!) * segFrac;
+      }
+
       // Send starting position immediately
       const startPt = route.points[0]!;
       try {
@@ -960,7 +995,7 @@ server.registerTool(
           lat: startPt.lat,
           lng: startPt.lng,
           accuracy: 3,
-          altitude: t.points[0]!.elevation ?? 0,
+          altitude: elevations[0]!,
           speed: 0,
           bearing: bearingAlongRoute(route, 0),
         });
@@ -978,7 +1013,7 @@ server.registerTool(
               lat: endPt.lat,
               lng: endPt.lng,
               accuracy: 3,
-              altitude: t.points[t.points.length - 1]!.elevation ?? 0,
+              altitude: elevations[elevations.length - 1]!,
               speed: 0,
               bearing: 0,
             });
@@ -997,7 +1032,7 @@ server.registerTool(
             lat: pos.lat,
             lng: pos.lng,
             accuracy: 3,
-            altitude: 0,
+            altitude: elevationAtFraction(frac),
             speed: effectiveSpeedMs,
             bearing,
           });
