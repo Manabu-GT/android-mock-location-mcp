@@ -2,13 +2,9 @@
 
 ## Project Overview
 
-MCP server + Android agent for controlling Android device GPS location during QA testing.
+MCP server for controlling Android emulator GPS location during QA testing. Sets mock locations via NMEA sentences (`adb emu geo nmea`) — no Android agent app needed.
 
-Two components:
-- **MCP Server** (`server/`) — TypeScript/Node.js, exposes 9 location tools via MCP protocol
-- **Android Agent** (`android/`) — Kotlin/Compose app, foreground service that sets mock locations via `LocationManager`
-
-Communication: MCP client ←MCP (stdio)→ Server ←TCP port 5005 (via `adb forward`)→ Android Agent
+Communication: MCP client ←MCP (stdio)→ Server ←`adb emu geo nmea`→ Android Emulator
 
 ## Key Commands
 
@@ -16,30 +12,22 @@ Communication: MCP client ←MCP (stdio)→ Server ←TCP port 5005 (via `adb fo
 # Server
 cd server && npm install && npm run build && npm start
 
-# Android
-cd android && ./gradlew installDebug
-
-# Test connection (after device setup + service started)
-adb forward tcp:5005 tcp:5005
-echo '{"id":"test","type":"status"}' | nc localhost 5005
+# Test connection (after emulator started)
+adb devices  # should show emulator-5554 or similar
 ```
 
 ## Project Structure
 
 ```
 server/src/
-  index.ts          # MCP server, all 9 tool definitions (Zod schemas)
-  adb.ts            # ADB command execution with timeouts, device setup, agent install check
-  device.ts         # TCP socket to agent, connection state machine
+  index.ts          # MCP server, all 8 tool definitions (Zod schemas)
+  emulator.ts       # Emulator connection management, NMEA-based location setting via ADB
+  nmea.ts           # NMEA sentence generation (GPGGA + GPRMC with checksum)
+  adb.ts            # ADB command execution with timeouts, emulator validation
   geocode.ts        # Geocoding providers (Nominatim/Google/Mapbox)
   routing.ts        # Routing providers (OSRM/Google/Mapbox)
   geo-math.ts       # Haversine distance, bearing calculation
   fetch-utils.ts    # Shared fetch with timeout helper
-
-android/app/src/main/kotlin/com/ms/square/geomcpagent/
-  MainActivity.kt         # Entry point, permission handling
-  MockLocationService.kt  # Foreground service, socket server, mock location API
-  ui/MainScreen.kt        # Compose UI
 ```
 
 ## Provider Configuration
@@ -54,17 +42,15 @@ See [server/README.md](server/README.md) for full provider reference and env var
 
 ## Gotchas and Failure Modes
 
+- **Emulators only**: Only Android emulators are supported. Physical devices are not supported since mock location is set via `adb emu geo nmea` which is an emulator-specific command.
 - **OSRM car-only**: Public OSRM server only supports `car` profile. `foot`/`bike` silently return car routes. Use `google` or `mapbox` for walking/cycling.
 - **Nominatim rate limit**: 1 req/sec. Server hints AI to pass lat/lng directly when using OSM provider.
-- **Mock location setup**: Device must have Developer Options and USB Debugging enabled. The server auto-configures permissions, mock location app, service start, and port forwarding via `geo_connect_device`. See [android/README.md](android/README.md) for manual setup.
+- **Accuracy is approximate**: GPS accuracy is conveyed via HDOP in GPGGA sentences. The emulator derives accuracy from HDOP, so exact meter values may differ slightly.
 - **Single simulation**: Only one simulation runs at a time. Starting a new one stops the previous.
-- **Device disconnect**: Socket auto-reconnects once, but if the MCP server restarts, user must call `geo_connect_device` again.
-- **Newline-delimited JSON**: Protocol uses `\n`-delimited JSON with UUID `id` fields for request/response matching. See [protocol/PROTOCOL.md](protocol/PROTOCOL.md).
 
 ## Coding Conventions
 
 - TypeScript strict mode, ES modules (`"type": "module"` in package.json)
 - Zod for MCP tool input validation (schemas in `index.ts`)
 - Provider pattern: implement `GeocodeProvider` or `RoutingProvider` type, add case to `selectProvider()` in respective file
-- Android: Jetpack Compose UI, kotlinx.serialization for JSON, coroutines for async
 - Tool parameter names/types are defined in `index.ts` Zod schemas — keep `server/README.md` in sync when changing

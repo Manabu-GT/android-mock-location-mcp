@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <style name="Theme.GeoMCPAgent" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Material 3 dynamic color theming will be applied automatically -->
-    </style>
-</resources>

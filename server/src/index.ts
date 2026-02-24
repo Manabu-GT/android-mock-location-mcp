@@ -8,46 +8,18 @@ import { haversineDistance } from "./geo-math.js";
 import { getRoute, interpolateAlongRoute, bearingAlongRoute } from "./routing.js";
 import { createRequire } from "node:module";
 import {
-  sendCommand,
-  connectToDevice,
+  setLocation,
+  connectEmulator,
   getConnectedDeviceId,
   isConnected,
   onDisconnect,
-  initDevice,
-  shutdownDevice,
-} from "./device.js";
-import {
-  listDevices,
-  isAgentInstalled,
-  ensureDeviceSetup,
-  startAgentService,
-} from "./adb.js";
+  initEmulator,
+  shutdownEmulator,
+} from "./emulator.js";
+import { listDevices, isEmulator } from "./adb.js";
 
 const require = createRequire(import.meta.url);
 const { version } = require("../package.json") as { version: string };
-
-// ── Device Response Types ────────────────────────────────────────────────────
-
-interface DeviceLocationResponse {
-  success?: boolean;
-  lat?: number;
-  lng?: number;
-  accuracy?: number;
-  ageMs?: number;
-  error?: string;
-}
-
-function isLocationSuccess(
-  res: DeviceLocationResponse,
-): res is DeviceLocationResponse & { success: true; lat: number; lng: number } {
-  return (
-    res.success === true &&
-    typeof res.lat === "number" &&
-    typeof res.lng === "number" &&
-    !Number.isNaN(res.lat) &&
-    !Number.isNaN(res.lng)
-  );
-}
 
 // ── Simulation State ─────────────────────────────────────────────────────────
 
@@ -61,7 +33,7 @@ function stopSimulation(): void {
   }
 }
 
-// Stop any running simulation when the device disconnects.
+// Stop any running simulation when the emulator disconnects.
 onDisconnect(() => stopSimulation());
 
 function text(msg: string) {
@@ -81,14 +53,17 @@ const server = new McpServer({
 });
 
 // 1. geo_list_devices
-server.registerTool("geo_list_devices", { description: "List connected Android devices via ADB" }, async () => {
+server.registerTool("geo_list_devices", { description: "List connected Android emulators via ADB" }, async () => {
   try {
     const raw = await listDevices();
     const lines = raw.split("\n").slice(1).filter((l) => l.trim());
-    if (lines.length === 0) return text("No devices found. Ensure USB debugging is enabled.");
+    if (lines.length === 0) return text("No devices found. Start an Android emulator first.");
     const devices = lines.map((l) => {
       const parts = l.split(/\s+/);
-      return `  ${parts[0]}  ${parts.slice(1).join(" ")}`;
+      const serial = parts[0]!;
+      const info = parts.slice(1).join(" ");
+      const supported = isEmulator(serial) ? "" : " (not supported — emulators only)";
+      return `  ${serial}  ${info}${supported}`;
     });
     return text(`Devices:\n${devices.join("\n")}`);
   } catch {
@@ -100,80 +75,26 @@ server.registerTool("geo_list_devices", { description: "List connected Android d
 server.registerTool(
   "geo_connect_device",
   {
-    description: "Connect to an Android device for mock location control. Automatically starts the agent service if it is not already running.",
-    inputSchema: { deviceId: z.string().describe("Device serial from geo_list_devices, e.g. emulator-5554") },
+    description:
+      "Connect to an Android emulator for mock location control. " +
+      "Only emulators are supported (e.g. emulator-5554). " +
+      "Sets location via NMEA sentences — no agent app installation needed.",
+    inputSchema: { deviceId: z.string().describe("Emulator serial from geo_list_devices, e.g. emulator-5554") },
   },
   async ({ deviceId }) => {
-    // Try connecting directly first — service may already be running
-    try {
-      await connectToDevice(deviceId);
-      const res = (await sendCommand({ type: "status" })) as { success?: boolean };
-      if (res.success) return text(`Connected to ${deviceId}. Agent is running.`);
-      return text(`Connected to ${deviceId}, but agent returned unexpected response.`);
-    } catch {
-      // Connection failed — fall through to auto-start
-    }
-
-    // Verify the agent app is installed before attempting auto-start
-    try {
-      if (!isAgentInstalled(deviceId)) {
-        return text(
-          `GeoMCP Agent app is not installed on ${deviceId}.\n` +
-            "Install it with:\n" +
-            "  adb install -r android-mock-location-mcp-agent.apk\n" +
-            "Download the APK from https://github.com/Manabu-GT/android-mock-location-mcp/releases\n" +
-            "Or build from source in the repository root:\n" +
-            "  cd android && ./gradlew installDebug",
-        );
-      }
-    } catch (checkErr) {
+    if (!isEmulator(deviceId)) {
       return text(
-        `Failed to check if agent is installed on ${deviceId}: ${checkErr instanceof Error ? checkErr.message : String(checkErr)}`,
+        `"${deviceId}" is not an emulator. Only Android emulators are supported (e.g. emulator-5554).\n` +
+          "Start an Android emulator and use its serial from geo_list_devices.",
       );
     }
 
-    // Auto-start: set up permissions/mock location app, then launch agent service
     try {
-      ensureDeviceSetup(deviceId);
-    } catch (setupErr) {
-      // Non-fatal: permissions may already be granted, or device may not support pm grant.
-      // Log so failures are diagnosable.
-      console.error(`[geo_connect_device] ensureDeviceSetup failed (non-fatal): ${setupErr instanceof Error ? setupErr.message : String(setupErr)}`);
+      connectEmulator(deviceId);
+      return text(`Connected to ${deviceId}. Ready to set mock locations.`);
+    } catch (err) {
+      return text(`Failed to connect to ${deviceId}: ${err instanceof Error ? err.message : String(err)}`);
     }
-    try {
-      startAgentService(deviceId);
-    } catch (startErr) {
-      return text(
-        `Failed to auto-start agent service on ${deviceId}: ${startErr instanceof Error ? startErr.message : String(startErr)}`,
-      );
-    }
-
-    // Poll for service readiness (service needs time to initialize socket server)
-    const maxRetries = 5;
-    const initialDelayMs = 2000;
-    const retryDelayMs = 1000;
-    await new Promise((r) => setTimeout(r, initialDelayMs));
-
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        await connectToDevice(deviceId);
-        const res = (await sendCommand({ type: "status" })) as { success?: boolean };
-        if (res.success) return text(`Connected to ${deviceId}. Agent service was auto-started.`);
-        return text(`Connected to ${deviceId} (auto-started), but agent returned unexpected response.`);
-      } catch {
-        if (attempt < maxRetries) {
-          await new Promise((r) => setTimeout(r, retryDelayMs));
-        }
-      }
-    }
-
-    return text(
-      `Auto-started agent on ${deviceId}, but could not establish connection.\n` +
-        "Troubleshooting:\n" +
-        "  (1) Open the app and ensure location permissions are granted.\n" +
-        "  (2) Verify the app is selected as mock location app in Developer Options.\n" +
-        "  (3) Check agent logs: adb logcat -s GeoMCP",
-    );
   },
 );
 
@@ -181,7 +102,7 @@ server.registerTool(
 server.registerTool(
   "geo_set_location",
   {
-    description: "Set device GPS to coordinates or any place name/address (geocoded via configured provider)." + geocodeHint,
+    description: "Set emulator GPS to coordinates or any place name/address (geocoded via configured provider)." + geocodeHint,
     inputSchema: {
       lat: z.number().optional().describe("Latitude (-90 to 90)"),
       lng: z.number().optional().describe("Longitude (-180 to 180)"),
@@ -207,15 +128,14 @@ server.registerTool(
     }
 
     try {
-      const res = (await sendCommand({
-        type: "set_location",
+      setLocation({
         lat: coords.lat,
         lng: coords.lng,
         accuracy,
         altitude: 0,
         speed: 0,
         bearing: 0,
-      })) as { success?: boolean };
+      });
 
       let msg = `Location set to ${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}`;
       if (resolvedName) msg += ` (${resolvedName})`;
@@ -228,7 +148,7 @@ server.registerTool(
       }
 
       lastLocation = { lat: coords.lat, lng: coords.lng };
-      return text(res.success ? msg : `Agent error: ${JSON.stringify(res)}`);
+      return text(msg);
     } catch (err) {
       return text(`Error: ${err instanceof Error ? err.message : String(err)}`);
     }
@@ -243,8 +163,7 @@ server.registerTool(
       "Simulate movement along a route between two points at a given speed. " +
       "Routes follow real streets via a routing provider (configurable via PROVIDER env var). " +
       "Accepts place names (geocoded via configured provider) or lat/lng coordinates. " +
-      "If 'from' is omitted, automatically uses the current mock location, " +
-      "or the device's real GPS position, or asks the user for their starting location." + geocodeHint,
+      "If 'from' is omitted, automatically uses the current mock location as the starting point." + geocodeHint,
     inputSchema: {
       from: z.string().optional().describe("Starting place name or address"),
       to: z.string().optional().describe("Destination place name or address"),
@@ -279,36 +198,17 @@ server.registerTool(
       return { error: `Provide '${label}' place name or ${label}Lat/${label}Lng coordinates` };
     };
 
-    // Resolve start: explicit args → last mock position → real device GPS → error
+    // Resolve start: explicit args → last mock position → error
     let start: { lat: number; lng: number } | { error: string };
     if (from || (fromLat !== undefined && fromLng !== undefined)) {
       start = await resolveEndpoint(from, fromLat, fromLng, "from");
     } else if (lastLocation !== null) {
       start = { lat: lastLocation.lat, lng: lastLocation.lng };
-    } else if (isConnected()) {
-      try {
-        const loc = (await sendCommand({ type: "get_location" })) as DeviceLocationResponse;
-        if (isLocationSuccess(loc)) {
-          start = { lat: loc.lat, lng: loc.lng };
-        } else {
-          start = {
-            error:
-              "No starting location available. The device has no recent GPS fix. " +
-              "Ask the user for their starting location, or provide 'from' or fromLat/fromLng.",
-          };
-        }
-      } catch (err: unknown) {
-        start = {
-          error:
-            `Could not get device location: ${err instanceof Error ? err.message : String(err)}. ` +
-            "Ask the user for their starting location, or provide 'from' or fromLat/fromLng.",
-        };
-      }
     } else {
       start = {
         error:
-          "No starting location provided and no device connected. " +
-          "Provide 'from' or fromLat/fromLng, or connect a device first.",
+          "No starting location available. " +
+          "Provide 'from' or fromLat/fromLng, or set a location first with geo_set_location.",
       };
     }
 
@@ -327,30 +227,36 @@ server.registerTool(
 
     // Send starting position immediately
     const startPoint = route.points[0]!;
-    sendCommand({
-      type: "set_location",
-      lat: startPoint.lat,
-      lng: startPoint.lng,
-      accuracy: 3,
-      altitude: 0,
-      speed: 0,
-      bearing: bearingAlongRoute(route, 0),
-    }).catch(() => {});
+    try {
+      setLocation({
+        lat: startPoint.lat,
+        lng: startPoint.lng,
+        accuracy: 3,
+        altitude: 0,
+        speed: 0,
+        bearing: bearingAlongRoute(route, 0),
+      });
+    } catch {
+      // Continue — simulation interval will retry
+    }
     lastLocation = { lat: startPoint.lat, lng: startPoint.lng };
 
     simulationTimer = setInterval(() => {
       step++;
       if (step > totalSeconds) {
         const endPoint = route.points[route.points.length - 1]!;
-        sendCommand({
-          type: "set_location",
-          lat: endPoint.lat,
-          lng: endPoint.lng,
-          accuracy: 3,
-          altitude: 0,
-          speed: 0,
-          bearing: 0,
-        }).catch(() => {});
+        try {
+          setLocation({
+            lat: endPoint.lat,
+            lng: endPoint.lng,
+            accuracy: 3,
+            altitude: 0,
+            speed: 0,
+            bearing: 0,
+          });
+        } catch {
+          // ignore
+        }
         lastLocation = { lat: endPoint.lat, lng: endPoint.lng };
         stopSimulation();
         return;
@@ -358,15 +264,18 @@ server.registerTool(
       const frac = step / totalSeconds;
       const pos = interpolateAlongRoute(route, frac);
       const bearing = bearingAlongRoute(route, frac);
-      sendCommand({
-        type: "set_location",
-        lat: pos.lat,
-        lng: pos.lng,
-        accuracy: 3,
-        altitude: 0,
-        speed: effectiveSpeed,
-        bearing,
-      }).catch(() => {});
+      try {
+        setLocation({
+          lat: pos.lat,
+          lng: pos.lng,
+          accuracy: 3,
+          altitude: 0,
+          speed: effectiveSpeed,
+          bearing,
+        });
+      } catch {
+        // ignore
+      }
       lastLocation = { lat: pos.lat, lng: pos.lng };
     }, 1000);
 
@@ -453,7 +362,7 @@ server.registerTool(
         if (!canyonBad) {
           // Good GPS: send center with tight accuracy
           acc = 3 + Math.random() * 2;
-          // fall through to sendCommand with offsetLat/offsetLng = 0
+          // fall through with offsetLat/offsetLng = 0
         } else {
           acc = radiusMeters + Math.random() * radiusMeters;
           const dist = radiusMeters + Math.random() * 30;
@@ -463,15 +372,18 @@ server.registerTool(
         }
       }
 
-      sendCommand({
-        type: "set_location",
-        lat: center.lat + offsetLat,
-        lng: center.lng + offsetLng,
-        accuracy: acc,
-        altitude: 0,
-        speed: 0,
-        bearing: 0,
-      }).catch(() => {});
+      try {
+        setLocation({
+          lat: center.lat + offsetLat,
+          lng: center.lng + offsetLng,
+          accuracy: acc,
+          altitude: 0,
+          speed: 0,
+          bearing: 0,
+        });
+      } catch {
+        // ignore
+      }
       lastLocation = { lat: center.lat + offsetLat, lng: center.lng + offsetLng };
     }, 1000);
 
@@ -550,15 +462,18 @@ server.registerTool(
         return;
       }
       const pos = positions[idx]!;
-      sendCommand({
-        type: "set_location",
-        lat: pos.lat,
-        lng: pos.lng,
-        accuracy: 3,
-        altitude: 0,
-        speed: 0,
-        bearing: 0,
-      }).catch(() => {});
+      try {
+        setLocation({
+          lat: pos.lat,
+          lng: pos.lng,
+          accuracy: 3,
+          altitude: 0,
+          speed: 0,
+          bearing: 0,
+        });
+      } catch {
+        // ignore
+      }
       lastLocation = { lat: pos.lat, lng: pos.lng };
       idx++;
     }, 2000);
@@ -575,90 +490,31 @@ server.registerTool(
 // 7. geo_stop
 server.registerTool("geo_stop", { description: "Stop any active location simulation" }, async () => {
   stopSimulation();
-  try {
-    if (isConnected()) await sendCommand({ type: "stop" });
-  } catch {
-    // agent may not be connected
-  }
   return text("Simulation stopped.");
 });
 
 // 8. geo_get_status
 server.registerTool("geo_get_status", { description: "Get current connection and simulation status" }, async () => {
   const lines: string[] = [];
-  lines.push(`Device: ${getConnectedDeviceId() ?? "not connected"}`);
+  lines.push(`Emulator: ${getConnectedDeviceId() ?? "not connected"}`);
   lines.push(`Simulation: ${simulationTimer ? "active" : "idle"}`);
   if (lastLocation !== null) {
     lines.push(`Last position: ${lastLocation.lat.toFixed(6)}, ${lastLocation.lng.toFixed(6)}`);
   }
-  if (isConnected()) {
-    try {
-      const res = (await sendCommand({ type: "status" })) as Record<string, unknown>;
-      lines.push(`Agent: ${JSON.stringify(res)}`);
-    } catch (err) {
-      lines.push(`Agent: unreachable (${err instanceof Error ? err.message : String(err)})`);
-    }
-  }
   return text(lines.join("\n"));
 });
-
-// 9. geo_get_location
-server.registerTool(
-  "geo_get_location",
-  {
-    description:
-      "Get the device's current real GPS location (last known position from the device's location sensors). " +
-      "Only needed when no mock location is active and you need the device's physical position " +
-      "(e.g. as a starting point for a route). If a mock location is already set, use geo_get_status instead. " +
-      "If the device has no recent GPS fix, the tool will fail — in that case, ask the user for their current location.",
-  },
-  async () => {
-    if (!isConnected()) {
-      return text(
-        "Device not connected. Call geo_connect_device first.\n" +
-          "If you need the starting location for a route, ask the user where they are.",
-      );
-    }
-    try {
-      const res = (await sendCommand({ type: "get_location" })) as DeviceLocationResponse;
-      if (isLocationSuccess(res)) {
-        lastLocation = { lat: res.lat, lng: res.lng };
-        let msg = `Device location: ${res.lat.toFixed(6)}, ${res.lng.toFixed(6)}`;
-        const meta: string[] = [];
-        if (res.accuracy !== undefined && res.accuracy > 0) {
-          meta.push(`accuracy: ${res.accuracy.toFixed(1)}m`);
-        }
-        if (res.ageMs !== undefined && res.ageMs >= 0) {
-          const ageSec = Math.round(res.ageMs / 1000);
-          meta.push(ageSec < 3600 ? `age: ${ageSec}s` : `age: ${Math.round(ageSec / 60)}m`);
-        }
-        if (meta.length > 0) msg += ` (${meta.join(", ")})`;
-        return text(msg);
-      }
-      return text(
-        `Could not get device location: ${res.error ?? "unknown error"}\n` +
-          "Ask the user for their current location or provide coordinates directly.",
-      );
-    } catch (err) {
-      return text(
-        `Failed to get device location: ${err instanceof Error ? err.message : String(err)}\n` +
-          "Ask the user for their current location or provide coordinates directly.",
-      );
-    }
-  },
-);
 
 // ── Start ───────────────────────────────────────────────────────────────────
 
 function gracefulShutdown(): void {
   stopSimulation();
-  shutdownDevice();
+  shutdownEmulator();
   process.exit(0);
 }
 process.on("SIGTERM", gracefulShutdown);
 process.on("SIGINT", gracefulShutdown);
 
-initDevice();
+initEmulator();
 
 const transport = new StdioServerTransport();
 await server.connect(transport);
