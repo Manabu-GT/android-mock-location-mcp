@@ -22,7 +22,7 @@ Testing location-aware apps is painful. You either:
 - Write complex ADB scripts with hardcoded coordinates
 - Use clunky GUI mock location apps
 
-This MCP server lets you control emulator location from Android Studio/Cursor/Claude Code/Codex..etc. Say "drive to the airport" instead of copy-pasting coordinates.
+This MCP server lets you control emulator location from Android Studio, Cursor, Claude Code, Codex, etc. Say "drive to the airport" instead of copy-pasting coordinates.
 
 This server **controls your Android emulator's GPS** with built-in geocoding and street-level routing. No extra tools or agent apps needed — it sends NMEA sentences directly to the emulator via ADB.
 

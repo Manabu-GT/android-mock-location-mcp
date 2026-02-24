@@ -43,7 +43,7 @@ Before triggering a release workflow, update the version file. The CI validates 
 
 | Workflow        | File                  | Trigger                             | Purpose                                    |
 |-----------------|-----------------------|-------------------------------------|--------------------------------------------|
-| Server CI       | `server-ci.yml`       | Push/PR to `main` (server changes)  | Build + typecheck on Node 18/20/22         |
+| Server CI       | `server-ci.yml`       | Push/PR to `main` (server changes)  | Build + typecheck on Node 20/22            |
 | Release Server  | `server-release.yml`  | Manual dispatch                     | Publish to npm + GitHub Release            |
 
 Release workflows are restricted to the repository owner.

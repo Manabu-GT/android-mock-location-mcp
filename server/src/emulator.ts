@@ -1,6 +1,5 @@
 // ── Emulator location control via NMEA sentences ─────────────────────────────
 //
-// Replaces the TCP socket communication with the Android agent.
 // Sets mock locations on the emulator using `adb emu geo nmea` commands
 // with GPGGA (position/altitude/accuracy) and GPRMC (speed/bearing) sentences.
 
@@ -30,18 +29,23 @@ export function isConnected(): boolean {
 
 /**
  * Connect to an emulator by device ID.
- * Validates the emulator is reachable by sending a test NMEA sentence.
+ * Validates the emulator is reachable via ADB.
  */
 export function connectEmulator(deviceId: string): void {
-  // Verify the emulator accepts geo nmea commands by sending a minimal GPGGA
+  // Disconnect any previously connected emulator first
+  if (connectedDeviceId !== null && connectedDeviceId !== deviceId) {
+    disconnectEmulator();
+  }
+
+  // Verify the emulator is reachable without side-effects (no location change).
+  // ro.kernel.qemu is "1" on emulators — this confirms ADB connectivity.
   try {
-    const testSentence = buildGpgga({ lat: 0, lng: 0 });
-    adbDevice(deviceId, ["emu", "geo", "nmea", testSentence]);
+    adbDevice(deviceId, ["shell", "getprop", "ro.kernel.qemu"]);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     const stderr = isExecError(err) ? err.stderr?.trim() : undefined;
     throw new Error(
-      `Failed to send geo nmea to ${deviceId}: ${msg}${stderr ? ` (${stderr})` : ""}\n` +
+      `Failed to reach emulator ${deviceId}: ${msg}${stderr ? ` (${stderr})` : ""}\n` +
         "Ensure the emulator is running and ADB is connected.",
     );
   }
@@ -103,7 +107,7 @@ export interface EmulatorLocation {
  *
  * We extract lat, lng and optional accuracy (hAcc= or acc=).
  */
-function parseLocationLine(line: string): EmulatorLocation | null {
+export function parseLocationLine(line: string): EmulatorLocation | null {
   // Match "Location[<provider> <lat>,<lng>" pattern
   const coordMatch = line.match(/Location\[\S+\s+(-?[\d.]+),(-?[\d.]+)/);
   if (!coordMatch) return null;
@@ -157,8 +161,8 @@ export function getLocation(): EmulatorLocation | null {
       continue;
     }
 
-    // End of section: blank line or new section header (no leading whitespace)
-    if (inLastKnown && trimmed === "") {
+    // End of section: blank line or new non-indented section header
+    if (inLastKnown && (trimmed === "" || (trimmed !== "" && !line.startsWith(" ") && !line.startsWith("\t")))) {
       break;
     }
 

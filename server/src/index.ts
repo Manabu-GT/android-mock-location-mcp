@@ -275,10 +275,10 @@ server.registerTool(
             speed: 0,
             bearing: 0,
           });
+          lastLocation = { lat: endPoint.lat, lng: endPoint.lng };
         } catch {
-          // ignore
+          // ignore — emulator may have disconnected
         }
-        lastLocation = { lat: endPoint.lat, lng: endPoint.lng };
         stopSimulation();
         return;
       }
@@ -294,10 +294,10 @@ server.registerTool(
           speed: effectiveSpeed,
           bearing,
         });
+        lastLocation = { lat: pos.lat, lng: pos.lng };
       } catch {
-        // ignore
+        // ignore — emulator may have disconnected
       }
-      lastLocation = { lat: pos.lat, lng: pos.lng };
     }, 1000);
 
     const etaMin = (totalSeconds / 60).toFixed(1);
@@ -402,10 +402,10 @@ server.registerTool(
           speed: 0,
           bearing: 0,
         });
+        lastLocation = { lat: center.lat + offsetLat, lng: center.lng + offsetLng };
       } catch {
-        // ignore
+        // ignore — emulator may have disconnected
       }
-      lastLocation = { lat: center.lat + offsetLat, lng: center.lng + offsetLng };
     }, 1000);
 
     return text(
@@ -492,10 +492,10 @@ server.registerTool(
           speed: 0,
           bearing: 0,
         });
+        lastLocation = { lat: pos.lat, lng: pos.lng };
       } catch {
-        // ignore
+        // ignore — emulator may have disconnected
       }
-      lastLocation = { lat: pos.lat, lng: pos.lng };
       idx++;
     }, 2000);
 

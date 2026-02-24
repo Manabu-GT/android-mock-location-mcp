@@ -12,7 +12,7 @@ Thank you for considering contributing to android-mock-location-mcp! This docume
 
 ### Prerequisites
 
-- Node.js 18+ (tested on 18, 20, 22)
+- Node.js 20+ (tested on 20, 22)
 - npm
 - Android SDK Platform Tools (for `adb`)
 - Android emulator

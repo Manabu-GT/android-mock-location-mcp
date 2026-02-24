@@ -19,7 +19,9 @@ interface ExecError extends Error {
 }
 
 export function isExecError(err: unknown): err is ExecError {
-  return err instanceof Error && "stderr" in err;
+  if (!(err instanceof Error) || !("stderr" in err)) return false;
+  const { stderr } = err as ExecError;
+  return stderr === undefined || typeof stderr === "string";
 }
 
 // ── Validation ───────────────────────────────────────────────────────────────

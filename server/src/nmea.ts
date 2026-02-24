@@ -10,13 +10,27 @@
 
 // ── Coordinate Conversion ────────────────────────────────────────────────────
 
+/**
+ * Format minutes, handling the edge case where rounding pushes minutes to 60.
+ * Returns { degrees adjustment, formatted minutes string }.
+ */
+function formatMinutes(minutes: number, decimals: number): { overflow: number; formatted: string } {
+  const rounded = parseFloat(minutes.toFixed(decimals));
+  if (rounded >= 60) {
+    return { overflow: 1, formatted: (0).toFixed(decimals) };
+  }
+  return { overflow: 0, formatted: rounded.toFixed(decimals) };
+}
+
 /** Convert decimal-degree latitude to NMEA ddmm.mmmm format + hemisphere. */
 function toNmeaLatitude(decimal: number): { value: string; hemisphere: "N" | "S" } {
   const hemisphere = decimal >= 0 ? ("N" as const) : ("S" as const);
   const abs = Math.abs(decimal);
-  const degrees = Math.floor(abs);
-  const minutes = (abs - degrees) * 60;
-  const value = `${degrees.toString().padStart(2, "0")}${minutes.toFixed(4).padStart(7, "0")}`;
+  let degrees = Math.floor(abs);
+  const rawMinutes = (abs - degrees) * 60;
+  const { overflow, formatted } = formatMinutes(rawMinutes, 4);
+  degrees += overflow;
+  const value = `${degrees.toString().padStart(2, "0")}${formatted.padStart(7, "0")}`;
   return { value, hemisphere };
 }
 
@@ -24,9 +38,11 @@ function toNmeaLatitude(decimal: number): { value: string; hemisphere: "N" | "S"
 function toNmeaLongitude(decimal: number): { value: string; hemisphere: "E" | "W" } {
   const hemisphere = decimal >= 0 ? ("E" as const) : ("W" as const);
   const abs = Math.abs(decimal);
-  const degrees = Math.floor(abs);
-  const minutes = (abs - degrees) * 60;
-  const value = `${degrees.toString().padStart(3, "0")}${minutes.toFixed(4).padStart(7, "0")}`;
+  let degrees = Math.floor(abs);
+  const rawMinutes = (abs - degrees) * 60;
+  const { overflow, formatted } = formatMinutes(rawMinutes, 4);
+  degrees += overflow;
+  const value = `${degrees.toString().padStart(3, "0")}${formatted.padStart(7, "0")}`;
   return { value, hemisphere };
 }
 

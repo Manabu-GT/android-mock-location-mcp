@@ -150,4 +150,17 @@ describe("coordinate conversion", () => {
     expect(fields[4]).toBe("12225.1640");
     expect(fields[5]).toBe("W");
   });
+
+  test("minutes overflow at boundary (e.g. 59.99999°) does not produce 60.xxxx", () => {
+    // 59.9999999° → 59° 59.999994' which could round to 60.0000
+    // Should overflow into degrees: 60° 00.0000'
+    const sentence = buildGpgga({ lat: 59.9999999, lng: -179.9999999 });
+    const fields = sentence.split(",");
+    // Lat minutes must be < 60
+    const latMinutes = parseFloat(fields[2]!.slice(2));
+    expect(latMinutes).toBeLessThan(60);
+    // Lng minutes must be < 60
+    const lngMinutes = parseFloat(fields[4]!.slice(3));
+    expect(lngMinutes).toBeLessThan(60);
+  });
 });

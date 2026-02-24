@@ -1,23 +1,5 @@
 import { describe, test, expect } from "vitest";
-
-// We can't import getLocation() directly since it depends on ADB,
-// but we can test the parsing logic by extracting it.
-// For now, test the parseLocationLine regex logic inline.
-
-/** Parse a Location line from `dumpsys location` output (same logic as emulator.ts). */
-function parseLocationLine(line: string): { lat: number; lng: number; accuracy?: number } | null {
-  const coordMatch = line.match(/Location\[\S+\s+(-?[\d.]+),(-?[\d.]+)/);
-  if (!coordMatch) return null;
-
-  const lat = parseFloat(coordMatch[1]!);
-  const lng = parseFloat(coordMatch[2]!);
-  if (Number.isNaN(lat) || Number.isNaN(lng)) return null;
-
-  const accMatch = line.match(/(?:hAcc|acc)=([\d.]+)/);
-  const accuracy = accMatch ? parseFloat(accMatch[1]!) : undefined;
-
-  return { lat, lng, accuracy };
-}
+import { parseLocationLine } from "../emulator.js";
 
 describe("parseLocationLine", () => {
   test("parses GPS location with hAcc", () => {

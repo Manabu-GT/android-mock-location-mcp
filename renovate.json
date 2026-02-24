@@ -61,48 +61,6 @@
       ]
     },
     {
-      "description": "Kotlin major/minor updates require approval (for library compatibility)",
-      "matchPackageNames": [
-        "/^org\\.jetbrains\\.kotlin([.:]|$)/"
-      ],
-      "matchUpdateTypes": [
-        "major",
-        "minor"
-      ],
-      "dependencyDashboardApproval": true
-    },
-    {
-      "description": "Compose libraries - all updates require approval",
-      "groupName": "Compose",
-      "dependencyDashboardApproval": true,
-      "matchPackageNames": [
-        "/^androidx\\.compose/"
-      ]
-    },
-    {
-      "description": "Pin AGP to 8.x until Gradle 9 migration",
-      "matchPackageNames": [
-        "com.android.application"
-      ],
-      "allowedVersions": "8.x"
-    },
-    {
-      "description": "AndroidX libraries (excluding Compose)",
-      "groupName": "AndroidX libraries",
-      "matchPackageNames": [
-        "/^androidx\\./",
-        "!/^androidx\\.compose/"
-      ]
-    },
-    {
-      "description": "Build tooling plugins",
-      "groupName": "Build tooling",
-      "matchPackageNames": [
-        "/com\\.diffplug\\.spotless/",
-        "/io\\.gitlab\\.arturbosch\\.detekt/"
-      ]
-    },
-    {
       "description": "GitHub Actions - automerge minor/patch",
       "matchManagers": [
         "github-actions"
