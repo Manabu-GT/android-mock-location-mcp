@@ -352,6 +352,15 @@ server.registerTool(
     },
   },
   async ({ waypoints, speedKmh, trafficMultiplier, profile }) => {
+    // ── Validate parameters ────────────────────────────────────────────────
+    if (speedKmh <= 0) return text("speedKmh must be greater than 0.");
+    if (trafficMultiplier <= 0) return text("trafficMultiplier must be greater than 0.");
+    for (let i = 0; i < waypoints.length; i++) {
+      if (waypoints[i]!.dwellSeconds < 0) {
+        return text(`dwellSeconds must be >= 0 (waypoint[${i}]).`);
+      }
+    }
+
     // ── Resolve all waypoints ──────────────────────────────────────────────
     const resolved: { lat: number; lng: number }[] = [];
 
