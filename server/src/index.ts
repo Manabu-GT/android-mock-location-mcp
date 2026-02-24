@@ -423,6 +423,19 @@ server.registerTool(
     const phases: Phase[] = [];
     let tick = 0;
 
+    // Initial dwell at the first waypoint (before moving)
+    const firstDwell = waypoints[0]!.dwellSeconds;
+    if (firstDwell > 0) {
+      const startPoint = legs[0]!.route.points[0]!;
+      phases.push({
+        type: "dwell",
+        position: startPoint,
+        startTick: tick,
+        endTick: tick + firstDwell,
+      });
+      tick += firstDwell;
+    }
+
     for (let i = 0; i < legs.length; i++) {
       const leg = legs[i]!;
 
