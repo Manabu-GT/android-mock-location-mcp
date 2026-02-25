@@ -1,6 +1,6 @@
 {
   "name": "android-mock-location-mcp",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "MCP server for Android mock location testing",
   "type": "module",
   "main": "dist/index.js",
