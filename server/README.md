@@ -1,6 +1,6 @@
 # MCP Server — android-mock-location-mcp
 
-MCP server that exposes 11 tools for controlling Android emulator GPS location. Sets mock locations via NMEA sentences (`adb emu geo nmea`) and supports geocoding and street-level routing through configurable providers.
+MCP server that exposes 11 tools for controlling Android emulator GPS location. Sets mock locations via `adb emu geo fix` and supports geocoding and street-level routing through configurable providers.
 
 See the [root README](../README.md) for project overview and quick start.
 
@@ -189,7 +189,7 @@ No parameters.
 
 ### `geo_connect_device`
 
-Connect to an Android emulator for mock location control. Only emulators are supported (e.g. `emulator-5554`). No agent app installation needed — locations are set via NMEA sentences.
+Connect to an Android emulator for mock location control. Only emulators are supported (e.g. `emulator-5554`). Locations are set via the emulator's `geo fix` command.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
@@ -206,7 +206,6 @@ Set emulator GPS to coordinates or any place name/address. Geocodes place names 
 | `lat` | number | no | — | Latitude (-90 to 90) |
 | `lng` | number | no | — | Longitude (-180 to 180) |
 | `place` | string | no | — | Place name or address, e.g. `'Times Square'`, `'Tokyo Station'` |
-| `accuracy` | number | no | `3` | GPS accuracy in meters |
 
 Provide either `place` or both `lat`/`lng`.
 
@@ -370,25 +369,27 @@ Returns the emulator's latitude and longitude if a recent GPS fix is available, 
 
 ## How It Works
 
-The server sets emulator GPS location using NMEA sentences via `adb emu geo nmea`. Two sentence types are used together:
+The server sets emulator GPS location using `adb emu geo fix`, which updates the emulator's stored GPS state. The command format is:
 
-- **$GPGGA** — carries latitude, longitude, altitude, and HDOP (Horizontal Dilution of Precision, which Android uses to derive accuracy)
-- **$GPRMC** — carries latitude, longitude, speed over ground (in knots), and course/bearing
+```
+geo fix <longitude> <latitude> [<altitude> [<satellites> [<velocity>]]]
+```
 
-This approach requires no agent app on the emulator — NMEA sentences are processed directly by the emulator's GPS simulation layer.
+Unlike `geo nmea` (which injects one-shot NMEA sentences), `geo fix` updates the emulator's internal state so the position persists across the emulator's 1 Hz GPS update loop.
+
+The `geo fix` command is processed directly by the emulator's GPS simulation layer.
 
 ## Source Structure
 
 | File | Purpose |
 |------|---------|
 | `src/index.ts` | MCP server setup, all 11 tool definitions with Zod schemas |
-| `src/emulator.ts` | Emulator connection management, NMEA-based location setting via ADB |
-| `src/nmea.ts` | NMEA sentence generation (GPGGA + GPRMC with checksum) |
+| `src/emulator.ts` | Emulator connection management, location setting via `geo fix` |
 | `src/adb.ts` | ADB command execution with timeouts, emulator validation |
 | `src/geocode.ts` | Geocoding providers: Nominatim, Google, Mapbox |
 | `src/routing.ts` | Routing providers: OSRM, Google Routes API, Mapbox Directions |
 | `src/gpx-kml.ts` | GPX/KML file parsing for track replay |
-| `src/geo-math.ts` | Haversine distance, forward bearing calculation |
+| `src/geo-math.ts` | Haversine distance calculation |
 | `src/fetch-utils.ts` | Shared `fetchWithTimeout` helper |
 
 ## Development
@@ -404,10 +405,9 @@ The server communicates via stdio (MCP protocol). To test interactively, use the
 
 ## Known Limitations
 
-- **Emulators only.** The server uses `adb emu geo nmea` which only works with Android emulators. Physical devices are not supported.
+- **Emulators only.** The server uses `adb emu geo fix` which only works with Android emulators. Physical devices are not supported.
 - **Single emulator.** The server connects to one emulator at a time. Calling `geo_connect_device` with a different serial disconnects the previous one and stops any active simulation.
 - **Single simulation.** Only one simulation (route, jitter, or geofence) runs at a time. Starting a new one stops the previous.
-- **Accuracy is approximate.** GPS accuracy is conveyed via HDOP in the GPGGA sentence. Android derives accuracy from HDOP, so the resulting accuracy value may not exactly match the requested meters.
 
 See also: provider-specific limitations in the [Providers](#providers) table above.
 

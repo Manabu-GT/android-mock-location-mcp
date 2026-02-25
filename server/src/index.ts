@@ -5,8 +5,8 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { readFileSync } from "node:fs";
 import { geocodePlace } from "./geocode.js";
-import { haversineDistance, computeBearing } from "./geo-math.js";
-import { getRoute, interpolateAlongRoute, bearingAlongRoute, buildCumulativeDistances } from "./routing.js";
+import { haversineDistance } from "./geo-math.js";
+import { getRoute, interpolateAlongRoute, buildCumulativeDistances } from "./routing.js";
 import type { RouteResult, RoutePoint } from "./routing.js";
 import { parseGpxKml } from "./gpx-kml.js";
 import { createRequire } from "node:module";
@@ -103,7 +103,7 @@ server.registerTool(
     description:
       "Connect to an Android emulator for mock location control. " +
       "Only emulators are supported (e.g. emulator-5554). " +
-      "Sets location via NMEA sentences — no agent app installation needed.",
+      "Sets location via the emulator's `geo fix` command.",
     inputSchema: { deviceId: z.string().describe("Emulator serial from geo_list_devices, e.g. emulator-5554") },
   },
   async ({ deviceId }) => {
@@ -132,10 +132,9 @@ server.registerTool(
       lat: z.number().optional().describe("Latitude (-90 to 90)"),
       lng: z.number().optional().describe("Longitude (-180 to 180)"),
       place: z.string().optional().describe("Any place name or address, e.g. 'Uber HQ', 'Tokyo Station', '123 Main St Denver'"),
-      accuracy: z.number().default(3.0).describe("GPS accuracy in meters"),
     },
   },
-  async ({ lat, lng, place, accuracy }) => {
+  async ({ lat, lng, place }) => {
     let coords: { lat: number; lng: number };
     let resolvedName: string | undefined;
 
@@ -156,10 +155,8 @@ server.registerTool(
       setLocation({
         lat: coords.lat,
         lng: coords.lng,
-        accuracy,
         altitude: 0,
         speed: 0,
-        bearing: 0,
       });
 
       let msg = `Location set to ${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}`;
@@ -258,10 +255,8 @@ server.registerTool(
       setLocation({
         lat: startPoint.lat,
         lng: startPoint.lng,
-        accuracy: 3,
         altitude: 0,
         speed: 0,
-        bearing: bearingAlongRoute(route, 0),
       });
     } catch {
       // Continue — simulation interval will retry
@@ -276,10 +271,8 @@ server.registerTool(
           setLocation({
             lat: endPoint.lat,
             lng: endPoint.lng,
-            accuracy: 3,
             altitude: 0,
             speed: 0,
-            bearing: 0,
           });
           lastLocation = { lat: endPoint.lat, lng: endPoint.lng };
         } catch {
@@ -290,15 +283,12 @@ server.registerTool(
       }
       const frac = step / totalSeconds;
       const pos = interpolateAlongRoute(route, frac);
-      const bearing = bearingAlongRoute(route, frac);
       try {
         setLocation({
           lat: pos.lat,
           lng: pos.lng,
-          accuracy: 3,
           altitude: 0,
           speed: effectiveSpeed,
-          bearing,
         });
         lastLocation = { lat: pos.lat, lng: pos.lng };
       } catch {
@@ -475,10 +465,8 @@ server.registerTool(
       setLocation({
         lat: firstPoint.lat,
         lng: firstPoint.lng,
-        accuracy: 3,
         altitude: 0,
         speed: 0,
-        bearing: bearingAlongRoute(legs[0]!.route, 0),
       });
     } catch {
       // Continue — simulation interval will retry
@@ -495,10 +483,8 @@ server.registerTool(
           setLocation({
             lat: finalPoint.lat,
             lng: finalPoint.lng,
-            accuracy: 3,
             altitude: 0,
             speed: 0,
-            bearing: 0,
           });
           lastLocation = { lat: finalPoint.lat, lng: finalPoint.lng };
         } catch {
@@ -520,14 +506,11 @@ server.registerTool(
           const phaseDuration = phase.endTick - phase.startTick;
           const frac = (currentTick - phase.startTick) / phaseDuration;
           const pos = interpolateAlongRoute(phase.route, frac);
-          const bearing = bearingAlongRoute(phase.route, frac);
           setLocation({
             lat: pos.lat,
             lng: pos.lng,
-            accuracy: 3,
             altitude: 0,
             speed: effectiveSpeedMs,
-            bearing,
           });
           lastLocation = { lat: pos.lat, lng: pos.lng };
         } else {
@@ -535,10 +518,8 @@ server.registerTool(
           setLocation({
             lat: phase.position.lat,
             lng: phase.position.lng,
-            accuracy: 3,
             altitude: 0,
             speed: 0,
-            bearing: 0,
           });
           lastLocation = { lat: phase.position.lat, lng: phase.position.lng };
         }
@@ -617,20 +598,17 @@ server.registerTool(
       const mPerDegLng = 111_320 * Math.cos((center.lat * Math.PI) / 180);
       let offsetLat = 0;
       let offsetLng = 0;
-      let acc = radiusMeters;
 
       if (pattern === "random") {
         const angle = Math.random() * 2 * Math.PI;
         const dist = Math.random() * radiusMeters;
         offsetLat = (Math.sin(angle) * dist) / mPerDegLat;
         offsetLng = (Math.cos(angle) * dist) / mPerDegLng;
-        acc = radiusMeters + Math.random() * radiusMeters;
       } else if (pattern === "drift") {
         driftAngle += (Math.random() - 0.5) * 0.3;
         const dist = (radiusMeters * tick) / durationSeconds;
         offsetLat = (Math.sin(driftAngle) * dist) / mPerDegLat;
         offsetLng = (Math.cos(driftAngle) * dist) / mPerDegLng;
-        acc = dist + Math.random() * radiusMeters;
       } else {
         // urban_canyon: streaks of good/bad GPS (3-5s each)
         if (canyonStreakLeft <= 0) {
@@ -639,27 +617,21 @@ server.registerTool(
         }
         canyonStreakLeft--;
 
-        if (!canyonBad) {
-          // Good GPS: send center with tight accuracy
-          acc = 3 + Math.random() * 2;
-          // fall through with offsetLat/offsetLng = 0
-        } else {
-          acc = radiusMeters + Math.random() * radiusMeters;
+        if (canyonBad) {
           const dist = radiusMeters + Math.random() * 30;
           const angle = Math.random() * 2 * Math.PI;
           offsetLat = (Math.sin(angle) * dist) / mPerDegLat;
           offsetLng = (Math.cos(angle) * dist) / mPerDegLng;
         }
+        // Good GPS: fall through with offsetLat/offsetLng = 0
       }
 
       try {
         setLocation({
           lat: center.lat + offsetLat,
           lng: center.lng + offsetLng,
-          accuracy: acc,
           altitude: 0,
           speed: 0,
-          bearing: 0,
         });
         lastLocation = { lat: center.lat + offsetLat, lng: center.lng + offsetLng };
       } catch {
@@ -746,10 +718,8 @@ server.registerTool(
         setLocation({
           lat: pos.lat,
           lng: pos.lng,
-          accuracy: 3,
           altitude: 0,
           speed: 0,
-          bearing: 0,
         });
         lastLocation = { lat: pos.lat, lng: pos.lng };
       } catch {
@@ -829,10 +799,8 @@ server.registerTool(
         setLocation({
           lat: pt.lat,
           lng: pt.lng,
-          accuracy: 3,
           altitude: pt.elevation ?? 0,
           speed: 0,
-          bearing: 0,
         });
         lastLocation = { lat: pt.lat, lng: pt.lng };
         return text(
@@ -879,10 +847,8 @@ server.registerTool(
         setLocation({
           lat: startPt.lat,
           lng: startPt.lng,
-          accuracy: 3,
           altitude: startPt.elevation ?? 0,
           speed: 0,
-          bearing: points.length >= 2 ? computeBearing(startPt.lat, startPt.lng, points[1]!.lat, points[1]!.lng) : 0,
         });
       } catch {
         // Continue
@@ -897,10 +863,8 @@ server.registerTool(
             setLocation({
               lat: endPt.lat,
               lng: endPt.lng,
-              accuracy: 3,
               altitude: endPt.elevation ?? 0,
               speed: 0,
-              bearing: 0,
             });
             lastLocation = { lat: endPt.lat, lng: endPt.lng };
           } catch {
@@ -942,16 +906,13 @@ server.registerTool(
 
         const dist = haversineDistance(p1.lat, p1.lng, p2.lat, p2.lng);
         const speedMs = segDuration > 0 ? (dist / segDuration) * 1000 : 0;
-        const bearing = computeBearing(p1.lat, p1.lng, p2.lat, p2.lng);
 
         try {
           setLocation({
             lat,
             lng,
-            accuracy: 3,
             altitude: elevation,
             speed: speedMs,
-            bearing,
           });
           lastLocation = { lat, lng };
         } catch {
@@ -1016,10 +977,8 @@ server.registerTool(
         setLocation({
           lat: startPt.lat,
           lng: startPt.lng,
-          accuracy: 3,
           altitude: elevations[0]!,
           speed: 0,
-          bearing: bearingAlongRoute(route, 0),
         });
       } catch {
         // Continue
@@ -1034,10 +993,8 @@ server.registerTool(
             setLocation({
               lat: endPt.lat,
               lng: endPt.lng,
-              accuracy: 3,
               altitude: elevations[elevations.length - 1]!,
               speed: 0,
-              bearing: 0,
             });
             lastLocation = { lat: endPt.lat, lng: endPt.lng };
           } catch {
@@ -1048,15 +1005,12 @@ server.registerTool(
         }
         const frac = step / totalSeconds;
         const pos = interpolateAlongRoute(route, frac);
-        const bearing = bearingAlongRoute(route, frac);
         try {
           setLocation({
             lat: pos.lat,
             lng: pos.lng,
-            accuracy: 3,
             altitude: elevationAtFraction(frac),
             speed: effectiveSpeedMs,
-            bearing,
           });
           lastLocation = { lat: pos.lat, lng: pos.lng };
         } catch {

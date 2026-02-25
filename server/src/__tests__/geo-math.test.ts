@@ -1,5 +1,5 @@
 import { describe, test, expect } from "vitest";
-import { haversineDistance, computeBearing } from "../geo-math.js";
+import { haversineDistance } from "../geo-math.js";
 import { expectCloseTo } from "./test-utils.js";
 
 // ── haversineDistance ────────────────────────────────────────────────────────
@@ -46,46 +46,3 @@ describe("haversineDistance", () => {
   });
 });
 
-// ── computeBearing ──────────────────────────────────────────────────────────
-
-describe("computeBearing", () => {
-  test("due north ~0 degrees", () => {
-    const b = computeBearing(0, 0, 1, 0);
-    expectCloseTo(b, 0, 0.5);
-  });
-
-  test("due east ~90 degrees", () => {
-    const b = computeBearing(0, 0, 0, 1);
-    expectCloseTo(b, 90, 0.5);
-  });
-
-  test("due south ~180 degrees", () => {
-    const b = computeBearing(1, 0, 0, 0);
-    expectCloseTo(b, 180, 0.5);
-  });
-
-  test("due west ~270 degrees", () => {
-    const b = computeBearing(0, 1, 0, 0);
-    expectCloseTo(b, 270, 0.5);
-  });
-
-  test("northeast ~44.5 degrees", () => {
-    const b = computeBearing(0, 0, 1, 1);
-    expectCloseTo(b, 44.5, 1.0);
-  });
-
-  test("same point returns 0", () => {
-    const b = computeBearing(0, 0, 0, 0);
-    expect(b).toBe(0);
-  });
-
-  test("same point at pole returns 0", () => {
-    const b = computeBearing(90, 0, 90, 0);
-    expect(b).toBe(0);
-  });
-
-  test("southwest ~225 degrees", () => {
-    const b = computeBearing(1, 1, 0, 0);
-    expectCloseTo(b, 225, 1.0);
-  });
-});

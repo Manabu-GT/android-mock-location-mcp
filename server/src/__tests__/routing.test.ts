@@ -5,7 +5,6 @@ import {
   buildStraightLineRoute,
   decodeGooglePolyline,
   interpolateAlongRoute,
-  bearingAlongRoute,
 } from "../routing.js";
 import type { RoutePoint, RouteResult } from "../routing.js";
 import { expectCloseTo } from "./test-utils.js";
@@ -242,65 +241,3 @@ describe("interpolateAlongRoute", () => {
   });
 });
 
-// ── bearingAlongRoute ───────────────────────────────────────────────────────
-
-describe("bearingAlongRoute", () => {
-  test("single point route returns 0", () => {
-    const route = makeRoute([{ lat: 5, lng: 10 }]);
-    expect(bearingAlongRoute(route, 0.5)).toBe(0);
-  });
-
-  test("east-bound at fraction=0 returns ~90 degrees", () => {
-    const route = makeRoute([
-      { lat: 0, lng: 0 },
-      { lat: 0, lng: 1 },
-    ]);
-    expectCloseTo(bearingAlongRoute(route, 0), 90, 0.5);
-  });
-
-  test("east-bound at fraction=1 returns ~90 degrees", () => {
-    const route = makeRoute([
-      { lat: 0, lng: 0 },
-      { lat: 0, lng: 1 },
-    ]);
-    expectCloseTo(bearingAlongRoute(route, 1), 90, 0.5);
-  });
-
-  test("L-shaped route first half returns ~90 degrees (east)", () => {
-    // East then north: (0,0) -> (0,1) -> (1,1)
-    const route = makeRoute([
-      { lat: 0, lng: 0 },
-      { lat: 0, lng: 1 },
-      { lat: 1, lng: 1 },
-    ]);
-    expectCloseTo(bearingAlongRoute(route, 0.25), 90, 0.5);
-  });
-
-  test("L-shaped route second half returns ~0 degrees (north)", () => {
-    // East then north: (0,0) -> (0,1) -> (1,1)
-    const route = makeRoute([
-      { lat: 0, lng: 0 },
-      { lat: 0, lng: 1 },
-      { lat: 1, lng: 1 },
-    ]);
-    expectCloseTo(bearingAlongRoute(route, 0.75), 0, 0.5);
-  });
-
-  test("fraction < 0 clamps to first segment bearing", () => {
-    const route = makeRoute([
-      { lat: 0, lng: 0 },
-      { lat: 0, lng: 1 },
-      { lat: 1, lng: 1 },
-    ]);
-    expectCloseTo(bearingAlongRoute(route, -1), 90, 0.5);
-  });
-
-  test("fraction > 1 clamps to last segment bearing", () => {
-    const route = makeRoute([
-      { lat: 0, lng: 0 },
-      { lat: 0, lng: 1 },
-      { lat: 1, lng: 1 },
-    ]);
-    expectCloseTo(bearingAlongRoute(route, 2), 0, 0.5);
-  });
-});

@@ -15,7 +15,7 @@
 // To add a new provider, implement the RoutingProvider signature and add a
 // case to selectProvider().
 
-import { haversineDistance, computeBearing } from "./geo-math.js";
+import { haversineDistance } from "./geo-math.js";
 import { fetchWithTimeout } from "./fetch-utils.js";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -343,24 +343,3 @@ export function interpolateAlongRoute(route: RouteResult, fraction: number): Rou
   };
 }
 
-/**
- * Compute bearing along the route polyline at the given progress fraction.
- */
-export function bearingAlongRoute(route: RouteResult, fraction: number): number {
-  if (route.points.length < 2) return 0;
-
-  const clampedFrac = Math.max(0, Math.min(1, fraction));
-  const targetDist = clampedFrac * route.distanceMeters;
-  const cumDists = route.cumulativeDistances;
-
-  let i = 0;
-  while (i < cumDists.length - 1 && cumDists[i + 1]! <= targetDist) {
-    i++;
-  }
-
-  if (i >= route.points.length - 1) i = route.points.length - 2;
-
-  const p1 = route.points[i]!;
-  const p2 = route.points[i + 1]!;
-  return computeBearing(p1.lat, p1.lng, p2.lat, p2.lng);
-}

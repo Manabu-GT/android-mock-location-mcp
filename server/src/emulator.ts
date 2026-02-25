@@ -1,11 +1,16 @@
-// ── Emulator location control via NMEA sentences ─────────────────────────────
+// ── Emulator location control via `geo fix` ──────────────────────────────────
 //
-// Sets mock locations on the emulator using `adb emu geo nmea` commands
-// with GPGGA (position/altitude/accuracy) and GPRMC (speed/bearing) sentences.
+// Sets mock locations on the emulator using `adb emu geo fix` which updates
+// the emulator's stored GPS state.  Unlike `geo nmea`, `geo fix` survives the
+// emulator's 1 Hz PassiveGpsUpdater loop that re-sends from stored state.
+//
+// Format: geo fix <longitude> <latitude> [<altitude> [<satellites> [<velocity>]]]
+//   - longitude/latitude in decimal degrees (longitude FIRST)
+//   - altitude in meters
+//   - satellites count (integer)
+//   - velocity in knots
 
 import { adbDevice, isExecError } from "./adb.js";
-import { buildGpgga, buildGprmc } from "./nmea.js";
-import type { NmeaLocationParams } from "./nmea.js";
 
 // ── State ────────────────────────────────────────────────────────────────────
 
@@ -65,23 +70,47 @@ function disconnectEmulator(): void {
   }
 }
 
+export interface LocationParams {
+  lat: number;
+  lng: number;
+  altitude?: number;
+  /** Speed in meters per second. Converted to knots for `geo fix`. */
+  speed?: number;
+}
+
+const MS_TO_KNOTS = 1.94384;
+
 /**
- * Set mock location on the connected emulator via NMEA sentences.
- * Sends GPGGA (position + altitude + accuracy) then GPRMC (speed + bearing).
+ * Set mock location on the connected emulator via `geo fix`.
+ *
+ * `geo fix` updates the emulator's stored GPS state, so the 1 Hz
+ * PassiveGpsUpdater loop keeps broadcasting the new position.
  */
-export function setLocation(params: NmeaLocationParams): void {
+export function setLocation(params: LocationParams): void {
   if (!connectedDeviceId) {
     throw new Error(
       "Not connected to an emulator. Call geo_connect_device first with an emulator serial (e.g. emulator-5554).",
     );
   }
 
-  const gpgga = buildGpgga(params);
-  const gprmc = buildGprmc(params);
+  // geo fix <longitude> <latitude> [<altitude> [<satellites> [<velocity>]]]
+  const args: string[] = [
+    "emu", "geo", "fix",
+    params.lng.toFixed(6),
+    params.lat.toFixed(6),
+  ];
+
+  const altitude = params.altitude ?? 0;
+  const satellites = 8;
+  args.push(altitude.toFixed(1));
+  args.push(satellites.toString());
+
+  if (params.speed != null && params.speed > 0) {
+    args.push((params.speed * MS_TO_KNOTS).toFixed(1));
+  }
 
   try {
-    adbDevice(connectedDeviceId, ["emu", "geo", "nmea", gpgga]);
-    adbDevice(connectedDeviceId, ["emu", "geo", "nmea", gprmc]);
+    adbDevice(connectedDeviceId, args);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     // If ADB fails, the emulator may have been closed
