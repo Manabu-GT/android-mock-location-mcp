@@ -48,16 +48,13 @@ function toNmeaLongitude(decimal: number): { value: string; hemisphere: "E" | "W
 
 // ── Time / Date ──────────────────────────────────────────────────────────────
 
-/** Current UTC time as NMEA hhmmss.ss string. */
+/** Current UTC time as NMEA hhmmss string (no fractional seconds — the Android emulator's GNSS HAL parses the time field with %06d, which rejects decimals). */
 function nmeaTime(): string {
   const now = new Date();
   const h = now.getUTCHours().toString().padStart(2, "0");
   const m = now.getUTCMinutes().toString().padStart(2, "0");
   const s = now.getUTCSeconds().toString().padStart(2, "0");
-  const cs = Math.floor(now.getUTCMilliseconds() / 10)
-    .toString()
-    .padStart(2, "0");
-  return `${h}${m}${s}.${cs}`;
+  return `${h}${m}${s}`;
 }
 
 /** Current UTC date as NMEA ddmmyy string. */
