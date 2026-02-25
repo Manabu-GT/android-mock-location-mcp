@@ -2,9 +2,9 @@
 
 ## Project Overview
 
-MCP server for controlling Android emulator GPS location during QA testing. Sets mock locations via NMEA sentences (`adb emu geo nmea`) — no Android agent app needed.
+MCP server for controlling Android emulator GPS location during QA testing. Sets mock locations via `adb emu geo fix`.
 
-Communication: MCP client ←MCP (stdio)→ Server ←`adb emu geo nmea`→ Android Emulator
+Communication: MCP client ←MCP (stdio)→ Server ←`adb emu geo fix`→ Android Emulator
 
 ## Key Commands
 
@@ -21,13 +21,12 @@ adb devices  # should show emulator-5554 or similar
 ```
 server/src/
   index.ts          # MCP server, all 11 tool definitions (Zod schemas)
-  emulator.ts       # Emulator connection management, NMEA-based location setting via ADB
-  nmea.ts           # NMEA sentence generation (GPGGA + GPRMC with checksum)
+  emulator.ts       # Emulator connection management, location setting via `geo fix`
   adb.ts            # ADB command execution with timeouts, emulator validation
   geocode.ts        # Geocoding providers (Nominatim/Google/Mapbox)
   routing.ts        # Routing providers (OSRM/Google/Mapbox)
   gpx-kml.ts        # GPX/KML file parsing for track replay
-  geo-math.ts       # Haversine distance, bearing calculation
+  geo-math.ts       # Haversine distance calculation
   fetch-utils.ts    # Shared fetch with timeout helper
 ```
 
@@ -43,10 +42,9 @@ See [server/README.md](server/README.md) for full provider reference and env var
 
 ## Gotchas and Failure Modes
 
-- **Emulators only**: Only Android emulators are supported. Physical devices are not supported since mock location is set via `adb emu geo nmea` which is an emulator-specific command.
+- **Emulators only**: Only Android emulators are supported. Physical devices are not supported since mock location is set via `adb emu geo fix` which is an emulator-specific command.
 - **OSRM car-only**: Public OSRM server only supports `car` profile. `foot`/`bike` silently return car routes. Use `google` or `mapbox` for walking/cycling.
 - **Nominatim rate limit**: 1 req/sec. Server hints AI to pass lat/lng directly when using OSM provider.
-- **Accuracy is approximate**: GPS accuracy is conveyed via HDOP in GPGGA sentences. The emulator derives accuracy from HDOP, so exact meter values may differ slightly.
 - **Single simulation**: Only one simulation runs at a time. Starting a new one stops the previous.
 
 ## Coding Conventions

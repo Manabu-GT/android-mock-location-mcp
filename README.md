@@ -24,7 +24,7 @@ Testing location-aware apps is painful. You either:
 
 This MCP server lets you control emulator location from Android Studio, Cursor, Claude Code, Codex, etc. Say "drive to the airport" instead of copy-pasting coordinates.
 
-This server **controls your Android emulator's GPS** with built-in geocoding and street-level routing. No extra tools or agent apps needed — it sends NMEA sentences directly to the emulator via ADB.
+This server **controls your Android emulator's GPS** with built-in geocoding and street-level routing — it sends `geo fix` commands directly to the emulator via ADB.
 
 ## Architecture
 
@@ -35,14 +35,14 @@ This server **controls your Android emulator's GPS** with built-in geocoding and
 │  │ Claude/Cursor │ ←──→ │ MCP Server                  │ │
 │  │ or any MCP    │      │ • Geocoding + routing       │ │
 │  │ client        │      │ • Route interpolation       │ │
-│  └───────────────┘      │ • NMEA sentence generation  │ │
+│  └───────────────┘      │ • geo fix command            │ │
 │                          └──────────┬──────────────────┘ │
 └────────────────────────────────────┼────────────────────┘
-                                     │ adb emu geo nmea
+                                     │ adb emu geo fix
                                      ▼
 ┌─────────────────────────────────────────────────────────┐
 │  Android Emulator                                       │
-│  GPS location set via NMEA (GPGGA + GPRMC)              │
+│  GPS location set via geo fix                           │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -97,14 +97,14 @@ For provider options (Google, Mapbox), see [Server Configuration](server/README.
 
 ### 2. Start an Emulator
 
-Start an Android emulator from Android Studio or the command line. No special setup is needed — the server communicates directly via NMEA sentences.
+Start an Android emulator from Android Studio or the command line. No special setup is needed — the server communicates directly via `geo fix` commands.
 
 ### 3. Use It
 
 In your MCP client:
 
-```
-> Set location to Times Square New York with 50m accuracy
+```text
+> Set location to Times Square New York
 > Drive from here to SFO airport at 60 km/h
 ```
 

@@ -71,7 +71,7 @@ Open a [feature request issue](https://github.com/Manabu-GT/android-mock-locatio
 | `refactor/` | Code restructuring  |
 | `test/`     | Test additions      |
 
-Example: `feature/add-mapbox-isochrone`, `fix/nmea-checksum-error`
+Example: `feature/add-mapbox-isochrone`, `fix/geo-fix-altitude-error`
 
 ## Commit Messages
 
@@ -90,7 +90,7 @@ type(scope): description
 Examples:
 ```text
 feat(server): add HERE provider for geocoding
-fix(server): correct NMEA checksum calculation
+fix(server): correct geo fix coordinate order
 docs: update provider configuration table
 ```
 
