@@ -371,7 +371,7 @@ Returns the emulator's latitude and longitude if a recent GPS fix is available, 
 
 The server sets emulator GPS location using `adb emu geo fix`, which updates the emulator's stored GPS state. The command format is:
 
-```
+```text
 geo fix <longitude> <latitude> [<altitude> [<satellites> [<velocity>]]]
 ```
 

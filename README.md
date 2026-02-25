@@ -103,7 +103,7 @@ Start an Android emulator from Android Studio or the command line. No special se
 
 In your MCP client:
 
-```
+```text
 > Set location to Times Square New York
 > Drive from here to SFO airport at 60 km/h
 ```
